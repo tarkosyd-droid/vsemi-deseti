@@ -10,6 +10,7 @@
 <script src="https://cdnjs.cloudflare.com/ajax/libs/firebase/10.13.2/firebase-app-compat.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/firebase/10.13.2/firebase-database-compat.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/firebase/10.13.2/firebase-auth-compat.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/firebase/10.13.2/firebase-app-check-compat.min.js"></script>
 <script>
   const firebaseConfig = {
     apiKey: "AIzaSyDYMFmP5A-PP76xrXNtcXOrVdptEzb5154",
@@ -21,6 +22,7 @@
     appId: "1:93880412317:web:6df9c396792ef0efefcc74"
   };
   firebase.initializeApp(firebaseConfig);
+  firebase.appCheck().activate("6LeX0qktAAAAAGaQyzRsOGApf9Yb0Fy0il_qEZ1A", true);
   const fbdb = firebase.database();
   const fbauth = firebase.auth();
 </script>
