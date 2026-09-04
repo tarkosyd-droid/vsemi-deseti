@@ -267,6 +267,17 @@
   .levelup-card .lu-sub { color: var(--tx2); font-size: 14px; margin: 0; }
   @keyframes popIn { 0% { transform: scale(0.7); opacity: 0; } 70% { transform: scale(1.06); } 100% { transform: scale(1); opacity: 1; } }
   .quest-list { display: flex; flex-direction: column; gap: 8px; margin-top: 18px; }
+  .profile-avatar-row { display: flex; align-items: center; gap: 14px; margin-bottom: 14px; }
+  .avatar-circle-lg {
+    width: 56px; height: 56px; border-radius: 50%; background: #1c2030; border: 1px solid var(--line);
+    display: flex; align-items: center; justify-content: center; font-size: 26px; flex-shrink: 0;
+  }
+  .avatar-picker { display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 14px; }
+  .avatar-opt {
+    width: 36px; height: 36px; border-radius: 50%; display: flex; align-items: center; justify-content: center;
+    font-size: 17px; background: #1c2030; border: 1px solid var(--line); cursor: pointer;
+  }
+  .avatar-opt.selected { border-color: var(--accent); box-shadow: 0 0 0 2px rgba(111,140,255,0.25); }
   .quest-row { display: flex; align-items: center; gap: 10px; background: #12151f; border: 1px solid var(--line); border-radius: 10px; padding: 10px 12px; }
   .quest-check { font-size: 15px; width: 18px; text-align: center; flex-shrink: 0; }
   .quest-body { flex: 1; }
@@ -353,16 +364,18 @@
           <p class="hint" style="margin-top:8px;">Bez účtu se postup ukládá jen v tomhle prohlížeči.</p>
         </div>
         <div id="authLoggedIn" style="display:none;">
-          <p class="lb-title">🔐 Přihlášen</p>
-          <p class="hint" id="authUserEmail" style="margin:0 0 4px;"></p>
-          <p class="hint" id="authUserNick" style="margin:0 0 12px;"></p>
-          <div style="display:flex; gap:8px;">
-            <button class="btn-secondary" id="authNickBtn" style="margin-bottom:0;">Změnit přezdívku</button>
-            <button class="btn-secondary" id="authLogoutBtn" style="margin-bottom:0;">Odhlásit se</button>
+          <div class="profile-avatar-row">
+            <div class="avatar-circle-lg" id="profileAvatarCircle">🙂</div>
+            <div>
+              <p class="hint" id="authUserEmail" style="margin:0 0 2px;"></p>
+              <p class="hint" id="authUserNick" style="margin:0;"></p>
+            </div>
           </div>
+          <div class="avatar-picker" id="profileAvatarPicker"></div>
+          <button class="btn-secondary" id="authNickBtn" style="margin-bottom:0;">Změnit přezdívku</button>
         </div>
     </div>
-    <div class="card profile-card">
+    <div class="card profile-card" id="profileStatsCard" style="display:none;">
         <div class="profile-head">
           <div class="level-badge" id="levelBadge">Lv 1</div>
           <div class="xp-wrap">
@@ -374,6 +387,7 @@
         <p class="lb-title" style="margin-top:20px;">🗓️ Denní úkoly</p>
         <div class="quest-list" id="questList"></div>
     </div>
+    <button class="btn-secondary" id="authLogoutBtn" style="display:none;">Odhlásit se</button>
   </div>
 
   <div id="screen-lessons" class="card" style="display:none;">
@@ -697,14 +711,20 @@ async function saveProfile(p) {
 function updateAuthUI() {
   const out = document.getElementById("authLoggedOut");
   const inn = document.getElementById("authLoggedIn");
+  const statsCard = document.getElementById("profileStatsCard");
+  const logoutBtn = document.getElementById("authLogoutBtn");
   if (!out) return;
   if (currentUser) {
     out.style.display = "none";
     inn.style.display = "";
     document.getElementById("authUserEmail").textContent = currentUser.email;
+    if (statsCard) statsCard.style.display = "";
+    if (logoutBtn) logoutBtn.style.display = "";
   } else {
     out.style.display = "";
     inn.style.display = "none";
+    if (statsCard) statsCard.style.display = "none";
+    if (logoutBtn) logoutBtn.style.display = "none";
   }
 }
 function translateAuthError(e) {
@@ -789,6 +809,24 @@ function renderProfile(profile) {
   cachedProfile = profile;
   const nickEl = document.getElementById("authUserNick");
   if (nickEl) nickEl.textContent = profile.nickname ? "Přezdívka: " + profile.nickname : "";
+  const avatarCircle = document.getElementById("profileAvatarCircle");
+  const avatarPicker = document.getElementById("profileAvatarPicker");
+  if (avatarCircle && avatarPicker) {
+    const current = profile.avatar || AVATAR_OPTIONS[0];
+    avatarCircle.textContent = current;
+    avatarPicker.innerHTML = "";
+    AVATAR_OPTIONS.forEach(a => {
+      const opt = document.createElement("div");
+      opt.className = "avatar-opt" + (a === current ? " selected" : "");
+      opt.textContent = a;
+      opt.addEventListener("click", async () => {
+        profile.avatar = a;
+        await saveProfile(profile);
+        renderProfile(profile);
+      });
+      avatarPicker.appendChild(opt);
+    });
+  }
   const xp = profile.xp || 0;
   const { level: lvl, into, need } = getLevelInfo(xp);
   const levelEl = document.getElementById("levelBadge");
@@ -898,14 +936,15 @@ async function checkChampionBadge(cpm, acc) {
   }
 }
 
+const AVATAR_OPTIONS = ["🙂","😎","🤓","🚀","🎯","🔥","⭐","🐱","🦁","🦊","🐼","🍀"];
 const QUEST_POOL = [
-  { id: "finish2", type: "finish_n", target: 2, label: "Dokonči 2 lekce" },
-  { id: "finish3", type: "finish_n", target: 3, label: "Dokonči 3 lekce" },
-  { id: "speed40", type: "speed_target", target: 40, label: "Dosáhni 40 zn/min" },
-  { id: "speed60", type: "speed_target", target: 60, label: "Dosáhni 60 zn/min" },
-  { id: "speed80", type: "speed_target", target: 80, label: "Dosáhni 80 zn/min" },
-  { id: "perfect1", type: "perfect", target: 1, label: "Dokonči lekci na 100 %" },
-  { id: "race1", type: "race_play", target: 1, label: "Odjeď 1 závod" },
+  { id: "finish2", type: "finish_n", target: 2, label: "Dokonči 2 lekce (+40 XP)" },
+  { id: "finish3", type: "finish_n", target: 3, label: "Dokonči 3 lekce (+40 XP)" },
+  { id: "speed40", type: "speed_target", target: 40, label: "Dosáhni 40 zn/min (+40 XP)" },
+  { id: "speed60", type: "speed_target", target: 60, label: "Dosáhni 60 zn/min (+40 XP)" },
+  { id: "speed80", type: "speed_target", target: 80, label: "Dosáhni 80 zn/min (+40 XP)" },
+  { id: "perfect1", type: "perfect", target: 1, label: "Dokonči lekci na 100 % (+40 XP)" },
+  { id: "race1", type: "race_play", target: 1, label: "Odjeď 1 závod (+40 XP)" },
 ];
 let cachedProfile = null;
 function isoWeekKey(d) {
