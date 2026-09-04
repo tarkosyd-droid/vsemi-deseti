@@ -158,12 +158,6 @@
   .players li { display: flex; justify-content: space-between; padding: 9px 0; border-bottom: 1px solid var(--line); font-size: 14px; }
   .players li:last-child { border-bottom: none; }
   .tag { font-size: 11px; color: var(--tx2); background: #1c2030; padding: 3px 9px; border-radius: 20px; margin-right: 6px; }
-  .ready-tag { font-size: 11px; padding: 3px 9px; border-radius: 20px; background: rgba(78,224,138,0.15); color: var(--good); }
-  .ready-tag.notready { background: #1c2030; color: var(--tx2); }
-  .ready-row { display: flex; gap: 10px; margin: 4px 0 14px; }
-  .ready-row button { flex: 1; }
-  .btn-ready { background: rgba(78,224,138,0.15); color: var(--good); border: 1px solid rgba(78,224,138,0.3); }
-  .btn-ready.off { background: #1c2030; color: var(--tx); border: 1px solid var(--line); }
   .backlink { display: inline-block; margin-bottom: 14px; font-size: 13px; color: var(--tx2); cursor: pointer; }
   .backlink:hover { color: var(--tx); }
   .countdown {
@@ -417,10 +411,6 @@
     <div class="code-display" id="lobbyCodeDisplay">----</div>
     <p class="hint" id="lobbyHint">Pošli tento kód ostatním hráčům.</p>
     <ul class="players" id="playerList"></ul>
-    <div class="ready-row">
-      <button class="btn-ready off" id="readyBtn">Jsem připraven</button>
-    </div>
-    <p class="hint" id="readyCount" style="margin-top:-6px;"></p>
     <button class="btn-primary" id="startBtn">Spustit závod</button>
     <p class="hint" id="waitHint" style="display:none;">Čekáš, až závod spustí zakladatel lobby…</p>
     <button class="btn-secondary" id="leaveBtn">Opustit lobby</button>
@@ -1111,7 +1101,7 @@ document.getElementById("createBtn").addEventListener("click", async () => {
   playerName = autoPlayerName(); playerId = uid(); lobbyCode = randomCode(); isHost = true;
   const lobby = {
     code: lobbyCode, hostId: playerId, status: "waiting", startTime: null, duration: 45000,
-    players: { [playerId]: { name: playerName, wpm: 0, acc: 100, progress: 0, finished: false, ready: false } },
+    players: { [playerId]: { name: playerName, wpm: 0, acc: 100, progress: 0, finished: false } },
     createdAt: Date.now()
   };
   const ok = await setLobby(lobbyCode, lobby);
@@ -1129,7 +1119,7 @@ document.getElementById("joinBtn").addEventListener("click", async () => {
   if (!lobby) { err.textContent = "Lobby s tímto kódem neexistuje."; return; }
   if (lobby.status !== "waiting") { err.textContent = "Tenhle závod už běží, počkej na další kolo."; return; }
   playerName = autoPlayerName(); playerId = uid(); lobbyCode = code; isHost = false;
-  lobby.players[playerId] = { name: playerName, wpm: 0, acc: 100, progress: 0, finished: false, ready: false };
+  lobby.players[playerId] = { name: playerName, wpm: 0, acc: 100, progress: 0, finished: false };
   await setLobby(code, lobby);
   enterLobbyScreen();
 });
@@ -1151,18 +1141,9 @@ function renderPlayers(lobby) {
   entries.forEach(([pid, p]) => {
     const li = document.createElement("li");
     const hostTag = pid === lobby.hostId ? '<span class="tag">zakladatel</span>' : "";
-    const readyTag = '<span class="ready-tag ' + (p.ready ? "" : "notready") + '">' + (p.ready ? "připraven" : "čeká") + '</span>';
-    li.innerHTML = "<span>" + p.name + (pid === playerId ? " (ty)" : "") + "</span><span>" + hostTag + readyTag + "</span>";
+    li.innerHTML = "<span>" + p.name + (pid === playerId ? " (ty)" : "") + "</span><span>" + hostTag + "</span>";
     list.appendChild(li);
   });
-  const readyCount = entries.filter(([, p]) => p.ready).length;
-  document.getElementById("readyCount").textContent = readyCount + " / " + entries.length + " připraveno";
-  const me = lobby.players[playerId];
-  if (me) {
-    const btn = document.getElementById("readyBtn");
-    btn.textContent = me.ready ? "Zrušit připravenost" : "Jsem připraven";
-    btn.className = "btn-ready" + (me.ready ? "" : " off");
-  }
 }
 let lobbyListenerRef = null;
 function startPolling() {
@@ -1194,18 +1175,11 @@ document.getElementById("startBtn").addEventListener("click", async () => {
 });
 document.getElementById("leaveBtn").addEventListener("click", resetToHome);
 document.getElementById("againBtn").addEventListener("click", resetToHome);
-document.getElementById("readyBtn").addEventListener("click", async () => {
-  const lobby = await getLobby(lobbyCode);
-  if (!lobby || !lobby.players[playerId]) return;
-  lobby.players[playerId].ready = !lobby.players[playerId].ready;
-  await setLobby(lobbyCode, lobby);
-  renderPlayers(lobby);
-});
 document.getElementById("rematchBtn").addEventListener("click", async () => {
   const lobby = await getLobby(lobbyCode);
   if (!lobby) return;
   lobby.status = "waiting"; lobby.startTime = null;
-  Object.values(lobby.players).forEach(p => { p.wpm = 0; p.acc = 100; p.progress = 0; p.finished = false; p.ready = false; });
+  Object.values(lobby.players).forEach(p => { p.wpm = 0; p.acc = 100; p.progress = 0; p.finished = false; });
   await setLobby(lobbyCode, lobby);
   enterLobbyScreen();
 });
