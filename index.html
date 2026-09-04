@@ -1,0 +1,1177 @@
+<!DOCTYPE html>
+<html lang="cs">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Všemi deseti — trenažér psaní</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;700&family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@500;700&display=swap" rel="stylesheet">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/firebase/10.13.2/firebase-app-compat.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/firebase/10.13.2/firebase-database-compat.min.js"></script>
+<script>
+  const firebaseConfig = {
+    apiKey: "AIzaSyDYMFmP5A-PP76xrXNtcXOrVdptEzb5154",
+    authDomain: "psanideseti-ddf0e.firebaseapp.com",
+    databaseURL: "https://psanideseti-ddf0e-default-rtdb.europe-west1.firebasedatabase.app",
+    projectId: "psanideseti-ddf0e",
+    storageBucket: "psanideseti-ddf0e.firebasestorage.app",
+    messagingSenderId: "93880412317",
+    appId: "1:93880412317:web:6df9c396792ef0efefcc74"
+  };
+  firebase.initializeApp(firebaseConfig);
+  const fbdb = firebase.database();
+</script>
+<style>
+  * { box-sizing: border-box; }
+  :root {
+    --bg0: #0a0c11; --bg1: #12151d; --bg2: #191d28; --line: #262c3a;
+    --accent: #6f8cff; --accent2: #b06fff; --good: #4ee08a; --bad: #ff6b7d; --gold: #ffce54;
+    --tx: #eef0f6; --tx2: #9aa1b4;
+  }
+  body {
+    margin: 0; font-family: 'Inter', sans-serif; color: var(--tx);
+    min-height: 100vh; display: flex; justify-content: center; align-items: center; padding: 40px 16px;
+    background:
+      radial-gradient(1000px 500px at 15% -10%, #2a2560 0%, transparent 60%),
+      radial-gradient(900px 500px at 110% 10%, #1c3d55 0%, transparent 55%),
+      var(--bg0);
+    background-attachment: fixed;
+  }
+  .wrap { width: 100%; max-width: 860px; }
+  h1 {
+    font-family: 'Space Grotesk', sans-serif; font-size: 38px; font-weight: 700; margin: 0 0 6px;
+    background: linear-gradient(90deg, #fff, #b9c3ff);
+    -webkit-background-clip: text; background-clip: text; color: transparent;
+    letter-spacing: -0.5px;
+  }
+  .sub { color: var(--tx2); font-size: 15.5px; margin: 0 0 28px; }
+  .card {
+    background: linear-gradient(180deg, rgba(255,255,255,0.035), rgba(255,255,255,0));
+    background-color: var(--bg1);
+    border: 1px solid var(--line);
+    border-radius: 20px; padding: 24px;
+    margin-bottom: 16px;
+    box-shadow: 0 20px 50px -25px rgba(0,0,0,0.6);
+    animation: fadeIn 0.35s ease;
+  }
+  @keyframes fadeIn { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: none; } }
+  label { display: block; font-size: 12px; color: var(--tx2); margin-bottom: 6px; text-transform: uppercase; letter-spacing: 0.06em; }
+  input[type=text] {
+    width: 100%; font-size: 16px; padding: 12px 14px; border-radius: 10px; margin-bottom: 14px;
+    border: 1px solid var(--line); background: #0e1017; color: var(--tx); outline: none;
+    transition: border-color 0.15s, box-shadow 0.15s;
+  }
+  input[type=text]:focus { border-color: var(--accent); box-shadow: 0 0 0 3px rgba(111,140,255,0.18); }
+  input#joinCode { text-transform: uppercase; letter-spacing: 3px; font-family: 'JetBrains Mono', monospace; }
+  button {
+    font-family: 'Inter', sans-serif; font-size: 14.5px; font-weight: 600; padding: 13px 16px;
+    border-radius: 12px; border: none; cursor: pointer; transition: transform 0.08s ease, filter 0.15s ease, box-shadow 0.15s ease;
+  }
+  button:active { transform: scale(0.97); }
+  .btn-primary {
+    background: linear-gradient(135deg, var(--accent), var(--accent2)); color: #060714;
+    width: 100%; margin-bottom: 10px; box-shadow: 0 8px 20px -8px rgba(111,140,255,0.55);
+  }
+  .btn-primary:hover { filter: brightness(1.08); }
+  .btn-secondary { background: #1c2030; border: 1px solid var(--line); color: var(--tx); width: 100%; margin-bottom: 10px; }
+  .btn-secondary:hover { background: #232838; }
+  .btn-primary:disabled, .btn-secondary:disabled { opacity: 0.4; cursor: not-allowed; }
+  .err { color: var(--bad); font-size: 13px; min-height: 18px; margin: -4px 0 10px; }
+  .mode-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+  .mode-btn {
+    background: linear-gradient(160deg, #171b26, #12151f); border: 1px solid var(--line); border-radius: 18px;
+    padding: 26px 18px; text-align: left; color: var(--tx); cursor: pointer;
+    transition: border-color 0.15s, transform 0.1s, box-shadow 0.15s;
+    display: flex; flex-direction: column; min-height: 168px;
+  }
+  .mode-btn:hover { border-color: var(--accent); transform: translateY(-3px); box-shadow: 0 16px 32px -18px rgba(111,140,255,0.5); }
+  .mode-btn .ic {
+    font-size: 30px; margin-bottom: 14px; width: 52px; height: 52px; border-radius: 14px;
+    background: #1c2030; display: flex; align-items: center; justify-content: center;
+  }
+  .mode-btn .t { font-family: 'Space Grotesk', sans-serif; font-weight: 700; font-size: 19px; margin-bottom: 6px; }
+  .mode-btn .d { font-size: 13.5px; color: var(--tx2); line-height: 1.5; margin-top: auto; }
+  .lesson-list { display: flex; flex-direction: column; gap: 8px; }
+  .lesson-row {
+    display: flex; justify-content: space-between; align-items: center;
+    background: #12151f; border: 1px solid var(--line); border-radius: 12px;
+    padding: 13px 16px; cursor: pointer; transition: border-color 0.15s, transform 0.1s;
+  }
+  .lesson-row:hover { border-color: var(--accent); transform: translateX(2px); }
+  .lesson-row .name { font-size: 14px; font-weight: 600; }
+  .lesson-row .best { font-size: 12px; color: var(--tx2); }
+  .stat-row { display: flex; gap: 10px; margin-bottom: 18px; }
+  .stat { flex: 1; background: #12151f; border: 1px solid var(--line); border-radius: 12px; padding: 12px; text-align: center; }
+  .stat .num { font-family: 'Space Grotesk', sans-serif; font-size: 22px; font-weight: 700; }
+  .stat .lbl { font-size: 10.5px; color: var(--tx2); text-transform: uppercase; letter-spacing: 0.06em; }
+  .text-display {
+    position: relative; height: 64px; display: flex; align-items: center; overflow: hidden;
+    background: #0e1017; border: 1px solid var(--line); border-radius: 14px; padding: 0 22px; margin-bottom: 18px;
+  }
+  .text-track {
+    white-space: nowrap; position: relative; display: inline-block; flex: 0 0 auto;
+    font-size: 21px; letter-spacing: 0.3px; font-family: 'JetBrains Mono', monospace; color: var(--tx2);
+    transition: transform 0.15s ease;
+  }
+  .text-display span.done { color: var(--accent); }
+  .text-display span.bad { color: var(--bad); background: rgba(255,107,125,0.14); border-radius: 3px; }
+  .text-display span.cur { color: var(--tx); border-bottom: 2px solid var(--gold); animation: blink 1s step-start infinite; }
+  @keyframes blink { 50% { border-color: transparent; } }
+  .keyboard { display: flex; flex-direction: column; gap: 6px; margin-bottom: 16px; user-select: none; }
+  .krow { display: flex; gap: 6px; justify-content: center; }
+  .key {
+    height: 40px; min-width: 34px; border-radius: 8px; display: flex; align-items: center;
+    justify-content: center; font-size: 12px; font-weight: 700; padding: 0 6px;
+    border: 1px solid rgba(255,255,255,0.06); box-shadow: 0 2px 0 rgba(0,0,0,0.35);
+    transition: transform 0.06s ease, box-shadow 0.06s ease;
+  }
+  .key.next { outline: 2px solid var(--gold); transform: translateY(-2px); box-shadow: 0 4px 10px -2px rgba(255,206,84,0.4); }
+  .key.hitok { background: #1f5d43 !important; transform: translateY(1px); box-shadow: 0 1px 0 rgba(0,0,0,0.35); }
+  .key.hitbad { background: #6e2632 !important; transform: translateY(1px); box-shadow: 0 1px 0 rgba(0,0,0,0.35); }
+  .f-lp { background: #2c1f42; color: #c9a3f2; }
+  .f-lr { background: #1c3b34; color: #7fe0b6; }
+  .f-lm { background: #3d2230; color: #f2a3c0; }
+  .f-li { background: #3d331c; color: #f0cf7a; }
+  .f-ri { background: #1c3140; color: #7cc8ef; }
+  .f-rm { background: #251f42; color: #b0a3f2; }
+  .f-rr { background: #1e3a1f; color: #9ef0a3; }
+  .f-rp { background: #3d1f2e; color: #f2a3c9; }
+  .f-thumb { background: #1a1d29; color: #8890a6; }
+  .hint { font-size: 12.5px; color: var(--tx2); text-align: center; margin-top: 8px; }
+  .code-display {
+    text-align: center; font-family: 'JetBrains Mono', monospace; font-size: 38px; font-weight: 700; letter-spacing: 8px;
+    background: #0e1017; border: 1px solid var(--line); border-radius: 12px; padding: 16px; margin-bottom: 16px;
+    color: var(--accent); text-shadow: 0 0 24px rgba(111,140,255,0.4);
+  }
+  .players { list-style: none; margin: 0 0 10px; padding: 0; }
+  .players li { display: flex; justify-content: space-between; padding: 9px 0; border-bottom: 1px solid var(--line); font-size: 14px; }
+  .players li:last-child { border-bottom: none; }
+  .tag { font-size: 11px; color: var(--tx2); background: #1c2030; padding: 3px 9px; border-radius: 20px; margin-right: 6px; }
+  .ready-tag { font-size: 11px; padding: 3px 9px; border-radius: 20px; background: rgba(78,224,138,0.15); color: var(--good); }
+  .ready-tag.notready { background: #1c2030; color: var(--tx2); }
+  .ready-row { display: flex; gap: 10px; margin: 4px 0 14px; }
+  .ready-row button { flex: 1; }
+  .btn-ready { background: rgba(78,224,138,0.15); color: var(--good); border: 1px solid rgba(78,224,138,0.3); }
+  .btn-ready.off { background: #1c2030; color: var(--tx); border: 1px solid var(--line); }
+  .backlink { display: inline-block; margin-bottom: 14px; font-size: 13px; color: var(--tx2); cursor: pointer; }
+  .backlink:hover { color: var(--tx); }
+  .countdown {
+    text-align: center; font-family: 'Space Grotesk', sans-serif; font-size: 72px; font-weight: 700; padding: 44px 0;
+    background: linear-gradient(90deg, var(--accent), var(--accent2)); -webkit-background-clip: text; background-clip: text; color: transparent;
+  }
+  .track { display: flex; flex-direction: column; gap: 16px; margin-bottom: 20px; }
+  .lane-label { display: flex; justify-content: space-between; font-size: 12px; margin-bottom: 5px; color: var(--tx2); }
+  .lane-label b { color: var(--tx); font-weight: 600; }
+  .lane-track {
+    position: relative; height: 30px; border-radius: 20px; overflow: hidden;
+    background: repeating-linear-gradient(90deg, #12151f 0 18px, #171b27 18px 36px);
+    border: 1px solid var(--line);
+  }
+  .lane-progress { position: absolute; top:0; left:0; height: 100%; background: linear-gradient(90deg, rgba(111,140,255,0.12), rgba(176,111,255,0.22)); width: 0%; transition: width 0.25s ease; }
+  .lane-avatar { position: absolute; top: 50%; transform: translate(-50%, -50%); left: 0%; transition: left 0.25s ease; font-size: 19px; filter: drop-shadow(0 2px 4px rgba(0,0,0,0.5)); }
+  .flag { position: absolute; right: 8px; top: 50%; transform: translateY(-50%); font-size: 15px; opacity: 0.7; }
+  .leaderboard { list-style: none; margin: 0; padding: 0; }
+  .leaderboard li { display: flex; align-items: center; gap: 10px; padding: 12px 4px; border-bottom: 1px solid var(--line); font-size: 14px; border-radius: 10px; }
+  .leaderboard li:last-child { border-bottom: none; }
+  .leaderboard li.podium-1 { background: linear-gradient(90deg, rgba(255,206,84,0.1), transparent); }
+  .rank { font-weight: 700; width: 30px; color: var(--tx2); }
+  .podium-1 .rank { color: var(--gold); }
+  .progress-row { display: flex; align-items: center; gap: 10px; margin-bottom: 10px; }
+  .progress-row span { font-size: 12px; color: var(--tx2); font-family: 'JetBrains Mono', monospace; white-space: nowrap; }
+  .progress-row .pct { color: var(--tx2); min-width: auto; }
+  .progress-bar { flex: 1; height: 6px; border-radius: 20px; background: #1c2030; overflow: hidden; }
+  .progress-fill { height: 100%; width: 0%; background: linear-gradient(90deg, var(--accent), var(--accent2)); transition: width 0.15s ease; }
+  .feature-strip { display: flex; gap: 10px; margin-top: 16px; flex-wrap: wrap; }
+  .feature-chip {
+    flex: 1; min-width: 150px; display: flex; align-items: center; gap: 10px;
+    background: #12151f; border: 1px solid var(--line); border-radius: 12px; padding: 12px 14px;
+    font-size: 13px; color: var(--tx2);
+  }
+  .feature-chip .fi { font-size: 18px; }
+  .home-grid { display: flex; flex-direction: column; gap: 16px; }
+  .leaderboard-card { padding: 22px; }
+  .lb-title { font-family: 'Space Grotesk', sans-serif; font-weight: 700; font-size: 16px; margin: 0 0 14px; }
+  .leaderboard-card .leaderboard li { padding: 9px 2px; font-size: 13.5px; }
+  .leaderboard-card .rank { width: 22px; font-size: 13px; }
+  .profile-card { padding: 22px; }
+  .profile-head { display: flex; align-items: center; gap: 14px; margin-bottom: 18px; }
+  .level-badge {
+    flex-shrink: 0; width: 52px; height: 52px; border-radius: 14px;
+    background: linear-gradient(135deg, var(--accent), var(--accent2)); color: #060714;
+    display: flex; align-items: center; justify-content: center; font-family: 'Space Grotesk', sans-serif;
+    font-weight: 700; font-size: 14px;
+  }
+  .xp-wrap { flex: 1; }
+  .xp-label { display: flex; justify-content: space-between; font-size: 12.5px; color: var(--tx2); margin-bottom: 6px; }
+  .xp-bar { height: 8px; border-radius: 20px; background: #1c2030; overflow: hidden; }
+  .xp-fill { height: 100%; width: 0%; background: linear-gradient(90deg, var(--gold), var(--accent2)); transition: width 0.3s ease; }
+  .badge-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; }
+  .badge { background: #12151f; border: 1px solid var(--line); border-radius: 12px; padding: 12px 6px; text-align: center; transition: transform 0.1s; }
+  .badge:hover { transform: translateY(-2px); }
+  .badge.locked { opacity: 0.32; filter: grayscale(1); }
+  .badge .bi { font-size: 22px; margin-bottom: 6px; }
+  .badge .bn { font-size: 10.5px; color: var(--tx2); line-height: 1.3; }
+  .toast {
+    position: fixed; bottom: 26px; left: 50%; transform: translateX(-50%);
+    background: #1c2030; border: 1px solid var(--accent); color: var(--tx);
+    padding: 11px 20px; border-radius: 12px; font-size: 13.5px; font-weight: 600; z-index: 80;
+    box-shadow: 0 10px 30px -10px rgba(0,0,0,0.6);
+    animation: toastIn 0.25s ease, toastOut 0.3s ease 2.6s forwards;
+  }
+  @keyframes toastIn { from { opacity: 0; transform: translate(-50%, 12px); } to { opacity: 1; transform: translate(-50%, 0); } }
+  @keyframes toastOut { to { opacity: 0; transform: translate(-50%, -6px); } }
+  .levelup-overlay {
+    position: fixed; inset: 0; display: flex; align-items: center; justify-content: center;
+    background: rgba(6,7,12,0.6); z-index: 90; animation: fadeIn 0.2s ease; cursor: pointer;
+  }
+  .levelup-card {
+    background: linear-gradient(160deg, #1c2030, #12151f); border: 1px solid var(--gold); border-radius: 22px;
+    padding: 36px 46px; text-align: center; animation: popIn 0.4s cubic-bezier(.34,1.56,.64,1);
+    box-shadow: 0 24px 70px -20px rgba(255,206,84,0.45);
+  }
+  .levelup-card .lu-icon { font-size: 50px; margin-bottom: 10px; }
+  .levelup-card .lu-title {
+    font-family: 'Space Grotesk', sans-serif; font-size: 26px; font-weight: 700; margin: 0 0 6px;
+    background: linear-gradient(90deg, var(--gold), var(--accent2));
+    -webkit-background-clip: text; background-clip: text; color: transparent;
+  }
+  .levelup-card .lu-sub { color: var(--tx2); font-size: 14px; margin: 0; }
+  @keyframes popIn { 0% { transform: scale(0.7); opacity: 0; } 70% { transform: scale(1.06); } 100% { transform: scale(1); opacity: 1; } }
+  .quest-list { display: flex; flex-direction: column; gap: 8px; margin-top: 18px; }
+  .quest-row { display: flex; align-items: center; gap: 10px; background: #12151f; border: 1px solid var(--line); border-radius: 10px; padding: 10px 12px; }
+  .quest-check { font-size: 15px; width: 18px; text-align: center; flex-shrink: 0; }
+  .quest-body { flex: 1; }
+  .quest-label { font-size: 12.5px; margin-bottom: 4px; }
+  .quest-row.done .quest-label { color: var(--good); }
+  .quest-bar { height: 5px; border-radius: 20px; background: #1c2030; overflow: hidden; }
+  .quest-fill { height: 100%; background: var(--accent); width: 0%; transition: width 0.2s ease; }
+  .board-tabs { display: flex; gap: 8px; margin-bottom: 12px; }
+  .board-tab {
+    flex: 1; padding: 8px; border-radius: 9px; border: 1px solid var(--line); background: #12151f;
+    color: var(--tx2); font-size: 12.5px; font-weight: 600; cursor: pointer;
+  }
+  .board-tab.active { background: rgba(111,140,255,0.15); color: var(--accent); border-color: var(--accent); }
+  .lname { flex: 1; font-weight: 500; }
+  .lscore { font-weight: 700; color: var(--accent); font-family: 'JetBrains Mono', monospace; font-size: 13px; }
+  #confettiLayer { position: fixed; inset: 0; pointer-events: none; overflow: hidden; z-index: 50; }
+  .confetti-piece { position: absolute; top: -20px; border-radius: 2px; animation: fall linear forwards; }
+  @keyframes fall { to { transform: translateY(110vh) rotate(540deg); opacity: 0.3; } }
+</style>
+</head>
+<body>
+<div id="confettiLayer"></div>
+<div class="wrap">
+  <h1>Všemi deseti</h1>
+  <p class="sub">Trenažér psaní všemi deseti prsty — barevná klávesnice, smysluplné lekce a živé závody na dráze.</p>
+
+  <div id="screen-home">
+    <div class="home-grid">
+      <div class="card">
+        <div class="mode-grid">
+          <div class="mode-btn" id="goPractice">
+            <div class="ic">⌨️</div>
+            <div class="t">Nácvik</div>
+            <div class="d">Lekce po řádcích se skutečnými slovy, barevná klávesnice a znaky za minutu.</div>
+          </div>
+          <div class="mode-btn" id="goRace">
+            <div class="ic">🏁</div>
+            <div class="t">Závod s přáteli</div>
+            <div class="d">Vytvoř lobby a piš stejný text v reálném čase na dráze.</div>
+          </div>
+        </div>
+        <div class="feature-strip">
+          <div class="feature-chip"><span class="fi">⌨️</span>Barevná klávesnice podle prstů</div>
+          <div class="feature-chip"><span class="fi">📊</span>Živé znaky za minutu a přesnost</div>
+          <div class="feature-chip"><span class="fi">🏆</span>Odveta a stupně vítězů v závodě</div>
+        </div>
+      </div>
+      <div class="card leaderboard-card">
+        <p class="lb-title">🏆 Nejrychlejší</p>
+        <div class="board-tabs">
+          <button class="board-tab active" id="tabAll">Celkově</button>
+          <button class="board-tab" id="tabWeek">Tento týden</button>
+        </div>
+        <ul class="leaderboard" id="homeLeaderboard"><p class="hint" style="margin:0;">Načítám…</p></ul>
+        <p class="hint" style="margin-top:10px; margin-bottom:0;">Globální žebříček ze všech lekcí a závodů.</p>
+      </div>
+      <div class="card profile-card">
+        <div class="profile-head">
+          <div class="level-badge" id="levelBadge">Lv 1</div>
+          <div class="xp-wrap">
+            <div class="xp-label"><span id="xpText">0 / 200 XP</span><span id="streakText">🔥 0 dní</span></div>
+            <div class="xp-bar"><div class="xp-fill" id="xpFill"></div></div>
+          </div>
+        </div>
+        <div class="badge-grid" id="badgeGrid"></div>
+        <p class="lb-title" style="margin-top:20px;">🗓️ Denní úkoly</p>
+        <div class="quest-list" id="questList"></div>
+      </div>
+    </div>
+  </div>
+
+  <div id="screen-lessons" class="card" style="display:none;">
+    <span class="backlink" data-back="home">← zpět</span>
+    <div class="lesson-list" id="lessonList"></div>
+  </div>
+
+  <div id="screen-solo" class="card" style="display:none;">
+    <span class="backlink" data-back="lessons">← zpět na lekce</span>
+    <div class="stat-row">
+      <div class="stat"><div class="num" id="soloWpm">0</div><div class="lbl">znaků/min</div></div>
+      <div class="stat"><div class="num" id="soloAcc">100%</div><div class="lbl">přesnost</div></div>
+      <div class="stat"><div class="num" id="soloErr">0</div><div class="lbl">chyby</div></div>
+    </div>
+    <div class="progress-row" id="soloProgressRow">
+      <span id="soloProgressLabel">0 / 0 znaků</span>
+      <div class="progress-bar"><div class="progress-fill" id="soloProgressFill"></div></div>
+      <span class="pct" id="soloProgressPct">0 %</span>
+    </div>
+    <div class="text-display" id="soloTextOuter"><div class="text-track" id="soloText"></div></div>
+    <div class="keyboard" id="soloKeyboard"></div>
+    <input type="text" id="typeInput" autocomplete="off" autocapitalize="off" autocorrect="off" spellcheck="false" style="position:absolute; opacity:0; width:1px; height:1px;">
+    <p class="hint" id="soloHint">Klikni sem a začni psát — časomíra startuje prvním úhozem.</p>
+  </div>
+
+  <div id="screen-solo-done" class="card" style="display:none;">
+    <p style="font-family:'Space Grotesk',sans-serif; font-weight:700; font-size:19px; margin:0 0 10px;">Lekce dokončena</p>
+    <div class="stat-row">
+      <div class="stat"><div class="num" id="doneWpm">0</div><div class="lbl">znaků/min</div></div>
+      <div class="stat"><div class="num" id="doneAcc">100%</div><div class="lbl">přesnost</div></div>
+      <div class="stat"><div class="num" id="doneErr">0</div><div class="lbl">chyby</div></div>
+    </div>
+    <button class="btn-primary" id="againSoloBtn">Zopakovat lekci</button>
+    <button class="btn-secondary" id="backLessonsBtn">Zpět na lekce</button>
+  </div>
+
+  <div id="screen-race-home" class="card" style="display:none;">
+    <span class="backlink" data-back="home">← zpět</span>
+    <label for="nameInput">Tvoje jméno</label>
+    <input type="text" id="nameInput" placeholder="např. Daniel" maxlength="16">
+    <button class="btn-primary" id="createBtn">Vytvořit lobby</button>
+    <label for="joinCode" style="margin-top:6px;">Nebo zadej kód lobby</label>
+    <input type="text" id="joinCode" placeholder="např. AB3X" maxlength="4">
+    <button class="btn-secondary" id="joinBtn">Připojit se</button>
+    <p class="err" id="homeErr"></p>
+  </div>
+
+  <div id="screen-lobby" class="card" style="display:none;">
+    <div class="code-display" id="lobbyCodeDisplay">----</div>
+    <p class="hint" id="lobbyHint">Pošli tento kód ostatním hráčům.</p>
+    <ul class="players" id="playerList"></ul>
+    <div class="ready-row">
+      <button class="btn-ready off" id="readyBtn">Jsem připraven</button>
+    </div>
+    <p class="hint" id="readyCount" style="margin-top:-6px;"></p>
+    <button class="btn-primary" id="startBtn">Spustit závod</button>
+    <p class="hint" id="waitHint" style="display:none;">Čekáš, až závod spustí zakladatel lobby…</p>
+    <button class="btn-secondary" id="leaveBtn">Opustit lobby</button>
+  </div>
+
+  <div id="screen-countdown" class="card" style="display:none;">
+    <div class="countdown" id="countdownNum">3</div>
+  </div>
+
+  <div id="screen-race" class="card" style="display:none;">
+    <div class="track" id="raceTrack"></div>
+    <div class="progress-row" id="raceProgressRow">
+      <span id="raceProgressLabel">0 / 0 znaků</span>
+      <div class="progress-bar"><div class="progress-fill" id="raceProgressFill"></div></div>
+      <span class="pct" id="raceProgressPct">0 %</span>
+    </div>
+    <div class="text-display" id="raceTextOuter"><div class="text-track" id="raceText"></div></div>
+    <div class="keyboard" id="raceKeyboard"></div>
+    <input type="text" id="raceInput" autocomplete="off" autocapitalize="off" autocorrect="off" spellcheck="false" style="position:absolute; opacity:0; width:1px; height:1px;">
+    <p class="hint" id="raceHint">Piš co nejrychleji a nejpřesněji.</p>
+  </div>
+
+  <div id="screen-results" class="card" style="display:none;">
+    <p style="font-family:'Space Grotesk',sans-serif; font-weight:700; font-size:19px; margin:0 0 14px;">Výsledky závodu</p>
+    <ul class="leaderboard" id="resultsList"></ul>
+    <button class="btn-primary" id="rematchBtn" style="margin-top:16px;">Odveta (stejná lobby)</button>
+    <button class="btn-secondary" id="againBtn">Zpět na start</button>
+  </div>
+
+  <p class="hint" id="netNote">Lobby a skóre se sdílejí mezi hráči přes uložiště tohoto artefaktu.</p>
+</div>
+
+<script>
+/* ---------- keyboard layout ---------- */
+const ROWS = [
+  [["1","lp"],["2","lr"],["3","lm"],["4","li"],["5","li"],["6","ri"],["7","ri"],["8","rm"],["9","rr"],["0","rp"]],
+  [["q","lp"],["w","lr"],["e","lm"],["r","li"],["t","li"],["y","ri"],["u","ri"],["i","rm"],["o","rr"],["p","rp"]],
+  [["a","lp"],["s","lr"],["d","lm"],["f","li"],["g","li"],["h","ri"],["j","ri"],["k","rm"],["l","rr"],[";","rp"]],
+  [["z","lp"],["x","lr"],["c","lm"],["v","li"],["b","li"],["n","ri"],["m","ri"],[",","rm"],[".","rr"],["/","rp"]],
+];
+function buildKeyboard(el) {
+  el.innerHTML = "";
+  ROWS.forEach(row => {
+    const r = document.createElement("div");
+    r.className = "krow";
+    row.forEach(([ch, fg]) => {
+      const k = document.createElement("div");
+      k.className = "key f-" + fg;
+      k.dataset.key = ch;
+      k.textContent = ch;
+      r.appendChild(k);
+    });
+    el.appendChild(r);
+  });
+  const spaceRow = document.createElement("div");
+  spaceRow.className = "krow";
+  const sp = document.createElement("div");
+  sp.className = "key f-thumb";
+  sp.style.minWidth = "220px";
+  sp.dataset.key = " ";
+  sp.textContent = "mezerník";
+  spaceRow.appendChild(sp);
+  el.appendChild(spaceRow);
+}
+const DIACRITIC_MAP = { "á":"a","č":"c","ď":"d","é":"e","ě":"e","í":"i","ň":"n","ó":"o","ř":"r","š":"s","ť":"t","ú":"u","ů":"u","ý":"y","ž":"z" };
+function baseChar(ch) {
+  const lower = ch.toLowerCase();
+  return DIACRITIC_MAP[lower] || lower;
+}
+function highlightNext(el, ch) {
+  el.querySelectorAll(".key").forEach(k => k.classList.remove("next"));
+  const target = ch === " " ? " " : baseChar(ch);
+  const k = el.querySelector('.key[data-key="' + CSS.escape(target) + '"]');
+  if (k) k.classList.add("next");
+}
+function flashKey(el, ch, ok) {
+  const target = ch === " " ? " " : baseChar(ch);
+  const k = el.querySelector('.key[data-key="' + CSS.escape(target) + '"]');
+  if (!k) return;
+  k.classList.add(ok ? "hitok" : "hitbad");
+  setTimeout(() => k.classList.remove(ok ? "hitok" : "hitbad"), 150);
+}
+
+/* ---------- lessons (real words, no diacritics) ---------- */
+const LESSONS = [
+  { id: "home", name: "Domácí řádka", texts: [
+    "asdf jklö sad dal had jak lak hlas hala sklad kladla skladal hlas sklad",
+    "jak dal hlas sklad hala sad had lak kladla skladal dal sad had",
+    "hlas hala sklad kladla skladal sad dal had jak lak asdf jklö"
+  ]},
+  { id: "top", name: "Horní řádka", texts: [
+    "dopisy a fotografie ukládá do starého kufru a hledá tajný poklad ve staré skříni",
+    "ráno jsem otevřel okno a uslyšel tiché kroky staré paní z horního patra",
+    "u potoka rostly vysoké topoly a děti tam každé léto stavěly dřevěné loďky"
+  ]},
+  { id: "bottom", name: "Spodní řádka", texts: [
+    "za lesem najdeme starou chalupu s modrými okny a velkou zahradou plnou včel a motýlů",
+    "medvěd se probudil ze zimního spánku a vydal se hledat první jarní bobule",
+    "cvičenci na hřišti běhali kolem branky a povzbuzovali se hlasitým voláním"
+  ]},
+  { id: "nums", name: "Čísla", texts: [
+    "V roce 2024 město postavilo 15 nových škol a 8 nemocnic pro přes 100 000 obyvatel.",
+    "Vlak číslo 742 odjíždí v 9:15 z nástupiště 3 a do cíle dorazí po 210 kilometrech.",
+    "Obchod prodal za jediný den 320 rohlíků, 45 dortů a 12 beden minerální vody."
+  ]},
+  { id: "long", name: "Dlouhé texty", texts: [
+    "Ráno vycházelo slunce pomalu nad kopci a celá vesnice se probouzela do nového dne. Sedláci vyháněli dobytek na pastviny, zatímco děti spěchaly do malé školy na kraji návsi. V hospodě u rybníka už vonělo čerstvé pečivo a starý mlynář počítal pytle mouky, které měl ještě téhož dne dovézt do města. Odpoledne se obloha zatáhla mraky a přišla prudká bouřka, která zahnala všechny domů dřív, než stihli dokončit práci na poli.",
+    "Ve velkém městě nikdy nebylo úplně ticho. Tramvaje rachotily po kolejích, taxikáři troubili na křižovatkách a v kavárnách na rohu ulic seděli lidé nad šálky horké kávy a listovali ranními novinami. Programátoři v kancelářích na desátém patře ladili nový systém, který měl usnadnit tisícům uživatelů každodenní práci. Večer se rozsvítily neonové nápisy a město se proměnilo v moře barevných světel, které bylo vidět i z okolních kopců.",
+    "Výprava vyrazila brzy ráno, ještě než se probudilo slunce. Průvodce vedl skupinu úzkou stezkou podél řeky, kde se voda leskla jako stříbro. Po několika hodinách chůze dorazili k vodopádu, kde si všichni sedli na kameny a otevřeli batohy s jídlem. Odpoledne pokračovali dál do hor, kde je čekal noční tábor pod hvězdnou oblohou. Než usnuli, poslouchali praskání ohně a vyprávěli si příběhy ze svých cest."
+  ]},
+  { id: "free", name: "Volný text", texts: null },
+];
+const RACE_TEXTS = [
+  "Rychlá liška přeběhla přes pole a schovala se v hustém lese, kde na ni čekala stará sova a moudrý ježek.",
+  "Každé ráno vychází slunce nad horami a probouzí ptáky, kteří zpívají svou píseň celému městu.",
+  "Starý hodinář opravoval hodiny v malé dílně plné ozubených koleček a tikajících přístrojů.",
+  "Děti si hrály na zahradě, zatímco rodiče připravovali večeři pro celou rodinu.",
+  "Kapitán lodi sledoval obzor a čekal na první paprsky světla z majáku na pobřeží.",
+  "V malém městečku se každý týden konal trh, kde prodávali čerstvé ovoce, zeleninu a domácí chléb.",
+  "Horolezci vystoupali na vrchol hory těsně před západem slunce a vyfotili nádherný výhled do údolí.",
+  "Knihovnice srovnávala staré knihy do regálů a hledala mezi nimi vzácný rukopis.",
+  "Vlak projížděl kolem řeky a cestující pozorovali z okna losy pasoucí se na louce.",
+  "Pekař každé ráno před svítáním připravoval těsto na chléb a rohlíky pro celý obchod.",
+  "Astronom pozoroval noční oblohu dalekohledem a hledal novou kometu mezi hvězdami.",
+  "Zahradník zasadil na jaře řadu zeleniny a v létě sklízel rajčata, okurky a papriky.",
+  "Novinář cestoval po zemi a psal reportáže o lidech, kteří změnili svůj region k lepšímu.",
+  "Hasiči rychle dorazili k požáru a během hodiny ho společně s dobrovolníky uhasili.",
+  "Cukrářka zdobila dort drobnými květinami z cukru a chystala ho na sobotní svatbu.",
+  "Rybáři vypluli za svítání na jezero a vrátili se s plnými sítěmi stříbrných ryb.",
+  "Malíř strávil celé odpoledne na louce, kde zachycoval barvy podzimního lesa na plátno.",
+  "Programátorka celou noc ladila kód, než konečně aplikace fungovala bez jediné chyby.",
+];
+
+function computeCpm(chars, ms) {
+  const minutes = ms / 60000;
+  if (minutes <= 0) return 0;
+  return Math.round(chars / minutes);
+}
+function randomFreeText() {
+  return RACE_TEXTS[Math.floor(Math.random() * RACE_TEXTS.length)];
+}
+function pickLessonText(lesson) {
+  if (lesson.id === "free" || !lesson.texts) return randomFreeText();
+  return lesson.texts[Math.floor(Math.random() * lesson.texts.length)];
+}
+function computeAcc(correct, total) {
+  if (total <= 0) return 100;
+  return Math.max(0, Math.round((correct / total) * 100));
+}
+
+function centerCurrent(outerEl, trackEl, curEl) {
+  if (!curEl) return;
+  const contWidth = outerEl.getBoundingClientRect().width;
+  let tx = contWidth / 2 - (curEl.offsetLeft + curEl.offsetWidth / 2);
+  tx = Math.min(0, tx);
+  trackEl.style.transform = "translateX(" + Math.round(tx) + "px)";
+}
+
+/* ---------- typing engine (shared by solo + race) ---------- */
+function makeTypingEngine(opts) {
+  const state = { text: opts.text, pos: 0, correctKeys: 0, totalKeys: 0, errors: 0, startTime: null, finished: false };
+  function render() {
+    const spans = state.text.split("").map((ch, i) => {
+      let cls = "";
+      if (i < state.pos) cls = "done";
+      else if (i === state.pos) cls = "cur";
+      return '<span class="' + cls + '">' + (ch === " " ? "&nbsp;" : ch) + "</span>";
+    });
+    opts.textEl.innerHTML = spans.join("");
+    const curEl = opts.textEl.querySelector("span.cur") || opts.textEl.lastElementChild;
+    centerCurrent(opts.outerEl, opts.textEl, curEl);
+    highlightNext(opts.keyboardEl, state.text[state.pos] || " ");
+    if (opts.onRender) opts.onRender(state);
+  }
+  function onKey(key) {
+    if (state.finished) return;
+    if (key.length !== 1) return;
+    if (state.startTime === null) state.startTime = Date.now();
+    const expected = state.text[state.pos];
+    state.totalKeys += 1;
+    const ok = key === expected;
+    flashKey(opts.keyboardEl, expected, ok);
+    if (ok) { state.correctKeys += 1; state.pos += 1; } else { state.errors += 1; }
+    render();
+    opts.onProgress(state);
+    if (state.pos >= state.text.length) { state.finished = true; opts.onFinish(state); }
+  }
+  render();
+  return { state, onKey, render };
+}
+
+/* ---------- confetti ---------- */
+function fireConfetti() {
+  const colors = ["#6f8cff","#b06fff","#4ee08a","#ffce54","#ff6b7d"];
+  const layer = document.getElementById("confettiLayer");
+  for (let i = 0; i < 60; i++) {
+    const p = document.createElement("div");
+    p.className = "confetti-piece";
+    p.style.left = Math.random() * 100 + "vw";
+    p.style.width = (5 + Math.random() * 5) + "px";
+    p.style.height = (8 + Math.random() * 8) + "px";
+    p.style.background = colors[Math.floor(Math.random() * colors.length)];
+    p.style.animationDuration = (2 + Math.random() * 1.5) + "s";
+    p.style.animationDelay = (Math.random() * 0.4) + "s";
+    layer.appendChild(p);
+    setTimeout(() => p.remove(), 4000);
+  }
+}
+
+const BADGES = [
+  { id: "perfect", icon: "🎯", name: "Přesňák", desc: "Dokonči lekci se 100% přesností.", check: c => c.acc === 100 },
+  { id: "fast60", icon: "⚡", name: "Rychlík 60", desc: "Dosáhni 60 znaků/min.", check: c => c.cpm >= 60 },
+  { id: "fast90", icon: "🚀", name: "Rychlík 90", desc: "Dosáhni 90 znaků/min.", check: c => c.cpm >= 90 },
+  { id: "marathon", icon: "📜", name: "Maratonec", desc: "Dokonči lekci Dlouhé texty.", check: c => c.lessonId === "long" },
+  { id: "ten", icon: "🔟", name: "Desítka", desc: "Dokonči 10 lekcí.", check: c => (c.profile.lessonsCompleted || 0) >= 10 },
+  { id: "week", icon: "🔥", name: "Týdenní šňůra", desc: "Trénuj 7 dní v řadě.", check: c => (c.profile.streak || 0) >= 7 },
+  { id: "racer", icon: "🏁", name: "Závodník", desc: "Dokonči svůj první závod.", check: c => c.isRace },
+  { id: "champion", icon: "🥇", name: "Šampion", desc: "Vyhraj závod s přáteli.", check: c => c.won },
+];
+function getLevelInfo(xp) {
+  let level = 1;
+  let remaining = xp || 0;
+  let need = level * 200;
+  while (remaining >= need) {
+    remaining -= need;
+    level++;
+    need = level * 200;
+  }
+  return { level, into: remaining, need };
+}
+function todayStr() { return new Date().toISOString().slice(0, 10); }
+async function loadProfile() {
+  try {
+    const raw = localStorage.getItem("profile:me");
+    return raw ? JSON.parse(raw) : { xp: 0, streak: 0, lastActiveDate: null, badges: [], lessonsCompleted: 0 };
+  } catch (e) { return { xp: 0, streak: 0, lastActiveDate: null, badges: [], lessonsCompleted: 0 }; }
+}
+async function saveProfile(p) {
+  try { localStorage.setItem("profile:me", JSON.stringify(p)); } catch (e) { /* ignorováno */ }
+}
+function updateStreak(profile) {
+  const today = todayStr();
+  if (profile.lastActiveDate === today) return;
+  const yesterday = new Date(Date.now() - 86400000).toISOString().slice(0, 10);
+  profile.streak = profile.lastActiveDate === yesterday ? (profile.streak || 0) + 1 : 1;
+  profile.lastActiveDate = today;
+}
+function showToast(msg) {
+  const t = document.createElement("div");
+  t.className = "toast";
+  t.textContent = msg;
+  document.body.appendChild(t);
+  setTimeout(() => t.remove(), 3000);
+}
+function renderProfile(profile) {
+  cachedProfile = profile;
+  const xp = profile.xp || 0;
+  const { level: lvl, into, need } = getLevelInfo(xp);
+  const levelEl = document.getElementById("levelBadge");
+  const xpTextEl = document.getElementById("xpText");
+  const xpFillEl = document.getElementById("xpFill");
+  const streakEl = document.getElementById("streakText");
+  const gridEl = document.getElementById("badgeGrid");
+  if (!levelEl) return;
+  levelEl.textContent = "Lv " + lvl;
+  xpTextEl.textContent = into + " / " + need + " XP";
+  xpFillEl.style.width = Math.round((into / need) * 100) + "%";
+  streakEl.textContent = "🔥 " + (profile.streak || 0) + " dní";
+  gridEl.innerHTML = "";
+  BADGES.forEach(b => {
+    const earned = (profile.badges || []).includes(b.id);
+    const el = document.createElement("div");
+    el.className = "badge" + (earned ? "" : " locked");
+    el.title = b.name + " — " + b.desc;
+    el.innerHTML = '<div class="bi">' + b.icon + '</div><div class="bn">' + b.name + '</div>';
+    gridEl.appendChild(el);
+  });
+  renderQuests(ensureDailyQuests(profile));
+}
+async function loadHomeProfile() {
+  const profile = await loadProfile();
+  renderProfile(profile);
+}
+function showLevelUp(level) {
+  const overlay = document.createElement("div");
+  overlay.className = "levelup-overlay";
+  overlay.innerHTML = '<div class="levelup-card"><div class="lu-icon">🎉</div><p class="lu-title">Level up!</p><p class="lu-sub">Dosáhl jsi úrovně ' + level + '</p></div>';
+  document.body.appendChild(overlay);
+  fireConfetti();
+  overlay.addEventListener("click", () => overlay.remove());
+  setTimeout(() => overlay.remove(), 2600);
+}
+async function recordResult({ cpm, acc, lessonId, isRace, won, textLength }) {
+  const profile = await loadProfile();
+  const oldLevel = getLevelInfo(profile.xp || 0).level;
+  const lengthBonus = Math.round((textLength || 0) / 10);
+  const gained = Math.round((cpm || 0) / 2) + (acc === 100 ? 20 : 0) + lengthBonus + 10;
+  profile.xp = (profile.xp || 0) + gained;
+  profile.lessonsCompleted = (profile.lessonsCompleted || 0) + 1;
+  updateStreak(profile);
+  profile.badges = profile.badges || [];
+  const ctx = { cpm, acc, lessonId, isRace, won, profile };
+  const newlyEarned = [];
+  BADGES.forEach(b => {
+    if (!profile.badges.includes(b.id) && b.check(ctx)) {
+      profile.badges.push(b.id);
+      newlyEarned.push(b);
+    }
+  });
+  await saveProfile(profile);
+  renderProfile(profile);
+  const newLevel = getLevelInfo(profile.xp).level;
+  if (newLevel > oldLevel) {
+    setTimeout(() => showLevelUp(newLevel), 300);
+  } else {
+    showToast("+" + gained + " XP");
+  }
+  newlyEarned.forEach((b, i) => setTimeout(() => showToast("Nový odznak: " + b.icon + " " + b.name), 1400 + i * 900));
+  const { bonus: questBonus, completed: questsCompleted } = updateDailyQuests(profile, { cpm, acc, isRace });
+  if (questBonus > 0) {
+    profile.xp += questBonus;
+    await saveProfile(profile);
+    renderProfile(profile);
+    const afterQuestLevel = getLevelInfo(profile.xp).level;
+    questsCompleted.forEach((q, i) => setTimeout(() => showToast("Splněný úkol: " + q.label + " (+40 XP)"), 2400 + i * 900));
+    if (afterQuestLevel > newLevel) setTimeout(() => showLevelUp(afterQuestLevel), 2200);
+  }
+  return { profile, newlyEarned };
+}
+async function checkChampionBadge(cpm, acc) {
+  const profile = await loadProfile();
+  profile.badges = profile.badges || [];
+  const champ = BADGES.find(b => b.id === "champion");
+  if (!profile.badges.includes("champion") && champ.check({ won: true })) {
+    profile.badges.push("champion");
+    await saveProfile(profile);
+    renderProfile(profile);
+    showToast("Nový odznak: " + champ.icon + " " + champ.name);
+  }
+}
+
+const QUEST_POOL = [
+  { id: "finish2", type: "finish_n", target: 2, label: "Dokonči 2 lekce" },
+  { id: "finish3", type: "finish_n", target: 3, label: "Dokonči 3 lekce" },
+  { id: "speed40", type: "speed_target", target: 40, label: "Dosáhni 40 zn/min" },
+  { id: "speed60", type: "speed_target", target: 60, label: "Dosáhni 60 zn/min" },
+  { id: "speed80", type: "speed_target", target: 80, label: "Dosáhni 80 zn/min" },
+  { id: "perfect1", type: "perfect", target: 1, label: "Dokonči lekci na 100 %" },
+  { id: "race1", type: "race_play", target: 1, label: "Odjeď 1 závod" },
+];
+let cachedProfile = null;
+function isoWeekKey(d) {
+  const date = new Date(d);
+  date.setHours(0, 0, 0, 0);
+  date.setDate(date.getDate() + 3 - ((date.getDay() + 6) % 7));
+  const week1 = new Date(date.getFullYear(), 0, 4);
+  const weekNo = 1 + Math.round(((date - week1) / 86400000 - 3 + ((week1.getDay() + 6) % 7)) / 7);
+  return date.getFullYear() + "-W" + weekNo;
+}
+function ensureDailyQuests(profile) {
+  const today = todayStr();
+  if (!profile.dailyQuests || profile.dailyQuests.date !== today) {
+    const rng = mulberry32(hashCode(today));
+    const pool = QUEST_POOL.slice();
+    const picked = [];
+    for (let i = 0; i < 3 && pool.length; i++) {
+      const idx = Math.floor(rng() * pool.length);
+      picked.push(pool.splice(idx, 1)[0]);
+    }
+    profile.dailyQuests = { date: today, quests: picked.map(q => ({ ...q, progress: 0, done: false })) };
+  }
+  return profile.dailyQuests;
+}
+function updateDailyQuests(profile, ctx) {
+  const dq = ensureDailyQuests(profile);
+  let bonus = 0;
+  const completed = [];
+  dq.quests.forEach(q => {
+    if (q.done) return;
+    if (q.type === "finish_n" && !ctx.isRace) q.progress = Math.min(q.target, q.progress + 1);
+    if (q.type === "speed_target" && ctx.cpm >= q.target) q.progress = q.target;
+    if (q.type === "perfect" && ctx.acc === 100) q.progress = q.target;
+    if (q.type === "race_play" && ctx.isRace) q.progress = Math.min(q.target, q.progress + 1);
+    if (q.progress >= q.target && !q.done) { q.done = true; bonus += 40; completed.push(q); }
+  });
+  return { bonus, completed };
+}
+function renderQuests(dailyQuests) {
+  const el = document.getElementById("questList");
+  if (!el) return;
+  el.innerHTML = dailyQuests.quests.map(q => {
+    const pct = Math.round((q.progress / q.target) * 100);
+    return '<div class="quest-row' + (q.done ? " done" : "") + '">'
+      + '<span class="quest-check">' + (q.done ? "✅" : "⬜") + '</span>'
+      + '<div class="quest-body"><div class="quest-label">' + q.label + '</div>'
+      + '<div class="quest-bar"><div class="quest-fill" style="width:' + pct + '%"></div></div></div></div>';
+  }).join("");
+}
+
+async function submitToLeaderboard(name, cpm, acc) {
+  if (!name || !cpm) return;
+  const entry = { name, cpm, acc, ts: Date.now() };
+  for (const path of ["board/top", "board/week/" + isoWeekKey(new Date())]) {
+    try {
+      const snap = await fbdb.ref(path).get();
+      let list = snap.exists() ? snap.val() : [];
+      list.push(entry);
+      list.sort((a, b) => b.cpm - a.cpm);
+      list = list.slice(0, 10);
+      await fbdb.ref(path).set(list);
+    } catch (e) { /* žebříček je jen bonus, chyba se ignoruje */ }
+  }
+}
+let boardScope = "all";
+async function loadHomeLeaderboard() {
+  const el = document.getElementById("homeLeaderboard");
+  if (!el) return;
+  const path = boardScope === "week" ? "board/week/" + isoWeekKey(new Date()) : "board/top";
+  try {
+    const snap = await fbdb.ref(path).get();
+    const list = snap.exists() ? snap.val() : [];
+    if (!list.length) { el.innerHTML = '<p class="hint" style="margin:0;">Zatím žádné výsledky. Buď první!</p>'; return; }
+    el.innerHTML = list.map((p, i) => {
+      const medal = i === 0 ? "🥇 " : i === 1 ? "🥈 " : i === 2 ? "🥉 " : "";
+      return '<li' + (i === 0 ? ' class="podium-1"' : '') + '><span class="rank">' + medal + (i + 1) + '</span>'
+        + '<span class="lname">' + p.name + '</span>'
+        + '<span class="lscore">' + p.cpm + ' zn/min</span></li>';
+    }).join("");
+  } catch (e) {
+    el.innerHTML = '<p class="hint" style="margin:0;">Žebříček se nepodařilo načíst.</p>';
+  }
+}
+document.getElementById("tabAll").addEventListener("click", () => {
+  boardScope = "all";
+  document.getElementById("tabAll").classList.add("active");
+  document.getElementById("tabWeek").classList.remove("active");
+  loadHomeLeaderboard();
+});
+document.getElementById("tabWeek").addEventListener("click", () => {
+  boardScope = "week";
+  document.getElementById("tabWeek").classList.add("active");
+  document.getElementById("tabAll").classList.remove("active");
+  loadHomeLeaderboard();
+});
+
+/* ---------- screen management ---------- */
+function show(id) {
+  ["home","lessons","solo","solo-done","race-home","lobby","countdown","race","results"].forEach(s => {
+    document.getElementById("screen-" + s).style.display = (s === id) ? "" : "none";
+  });
+  if (id === "home") { loadHomeLeaderboard(); loadHomeProfile(); }
+}
+document.querySelectorAll("[data-back]").forEach(el => { el.addEventListener("click", () => show(el.dataset.back)); });
+
+/* ---------- solo practice ---------- */
+document.getElementById("goPractice").addEventListener("click", () => { renderLessonList(); show("lessons"); });
+function renderLessonList() {
+  const el = document.getElementById("lessonList");
+  el.innerHTML = "";
+  LESSONS.forEach(l => {
+    const row = document.createElement("div");
+    row.className = "lesson-row";
+    const pool = l.texts || RACE_TEXTS;
+    const avgLen = Math.round(pool.reduce((s, t) => s + t.length, 0) / pool.length);
+    const meta = "pokaždé jiná věta · ~" + avgLen + " znaků";
+    row.innerHTML = '<span class="name">' + l.name + '</span><span class="best">' + meta + '</span>';
+    row.addEventListener("click", () => startSolo(l, pickLessonText(l)));
+    el.appendChild(row);
+  });
+}
+let soloEngine = null;
+function startSolo(lesson, text) {
+  const activeText = text || pickLessonText(lesson);
+  show("solo");
+  const textEl = document.getElementById("soloText");
+  const outerEl = document.getElementById("soloTextOuter");
+  const kbEl = document.getElementById("soloKeyboard");
+  buildKeyboard(kbEl);
+  document.getElementById("soloWpm").textContent = "0";
+  document.getElementById("soloAcc").textContent = "100%";
+  document.getElementById("soloErr").textContent = "0";
+  document.getElementById("soloHint").textContent = "Klikni sem a začni psát — časomíra startuje prvním úhozem.";
+  soloEngine = makeTypingEngine({
+    text: activeText, textEl, outerEl, keyboardEl: kbEl,
+    onRender: (state) => {
+      const pct = Math.round((state.pos / state.text.length) * 100);
+      document.getElementById("soloProgressLabel").textContent = state.pos + " / " + state.text.length + " znaků";
+      document.getElementById("soloProgressFill").style.width = pct + "%";
+      document.getElementById("soloProgressPct").textContent = pct + " %";
+    },
+    onProgress: (state) => {
+      const elapsed = state.startTime ? (Date.now() - state.startTime) : 0;
+      document.getElementById("soloWpm").textContent = computeCpm(state.correctKeys, elapsed);
+      document.getElementById("soloAcc").textContent = computeAcc(state.correctKeys, state.totalKeys) + "%";
+      document.getElementById("soloErr").textContent = state.errors;
+    },
+    onFinish: (state) => {
+      const elapsed = Date.now() - state.startTime;
+      document.getElementById("doneWpm").textContent = computeCpm(state.correctKeys, elapsed);
+      document.getElementById("doneAcc").textContent = computeAcc(state.correctKeys, state.totalKeys) + "%";
+      document.getElementById("doneErr").textContent = state.errors;
+      window._lastLesson = lesson;
+      document.getElementById("againSoloBtn").textContent = "Jiná věta";
+      const cpmDone = computeCpm(state.correctKeys, elapsed);
+      const accDone = computeAcc(state.correctKeys, state.totalKeys);
+      submitToLeaderboard(playerName || "Anonym", cpmDone, accDone);
+      recordResult({ cpm: cpmDone, acc: accDone, lessonId: lesson.id, isRace: false, won: false, textLength: state.text.length });
+      setTimeout(() => show("solo-done"), 650);
+    }
+  });
+  const input = document.getElementById("typeInput");
+  input.value = "";
+  input.focus();
+  document.getElementById("screen-solo").addEventListener("click", () => input.focus());
+  input.removeEventListener("keydown", soloKeyHandler);
+  input.addEventListener("keydown", soloKeyHandler);
+}
+function soloKeyHandler(e) {
+  if (e.key === "Backspace" || e.key.length === 1) {
+    e.preventDefault();
+    if (e.key.length === 1) soloEngine.onKey(e.key);
+  }
+}
+document.getElementById("againSoloBtn").addEventListener("click", () => startSolo(window._lastLesson));
+document.getElementById("backLessonsBtn").addEventListener("click", () => { renderLessonList(); show("lessons"); });
+
+/* ---------- race mode (lobby via shared storage) ---------- */
+function uid() { return "p" + Math.random().toString(36).slice(2, 10); }
+function hashCode(str) { let h = 0; for (let i = 0; i < str.length; i++) h = (Math.imul(31, h) + str.charCodeAt(i)) | 0; return h; }
+function mulberry32(seed) {
+  return function() {
+    seed |= 0; seed = (seed + 0x6D2B79F5) | 0;
+    let t = Math.imul(seed ^ (seed >>> 15), 1 | seed);
+    t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
+    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+  };
+}
+function randomCode() {
+  const chars = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
+  let c = ""; for (let i = 0; i < 4; i++) c += chars[Math.floor(Math.random() * chars.length)];
+  return c;
+}
+async function getLobby(code) {
+  try { const snap = await fbdb.ref("lobby/" + code).get(); return snap.exists() ? snap.val() : null; }
+  catch (e) { return null; }
+}
+async function setLobby(code, obj) {
+  try { await fbdb.ref("lobby/" + code).set(obj); return true; }
+  catch (e) { return false; }
+}
+
+let playerId = null, playerName = "", lobbyCode = null, isHost = false;
+let gameTimer = null, countdownTimer = null;
+let raceEngine = null, raceSubmitted = false, lastProgressSent = 0;
+
+document.getElementById("goRace").addEventListener("click", () => show("race-home"));
+
+document.getElementById("createBtn").addEventListener("click", async () => {
+  const nameEl = document.getElementById("nameInput");
+  const err = document.getElementById("homeErr");
+  err.textContent = "";
+  const name = nameEl.value.trim();
+  if (!name) { err.textContent = "Zadej nejdřív své jméno."; return; }
+  playerName = name; playerId = uid(); lobbyCode = randomCode(); isHost = true;
+  const lobby = {
+    code: lobbyCode, hostId: playerId, status: "waiting", startTime: null, duration: 45000,
+    players: { [playerId]: { name: playerName, wpm: 0, acc: 100, progress: 0, finished: false, ready: false } },
+    createdAt: Date.now()
+  };
+  const ok = await setLobby(lobbyCode, lobby);
+  if (!ok) { err.textContent = "Lobby se nepodařilo vytvořit, zkus to znovu."; return; }
+  enterLobbyScreen();
+});
+
+document.getElementById("joinBtn").addEventListener("click", async () => {
+  const nameEl = document.getElementById("nameInput");
+  const codeEl = document.getElementById("joinCode");
+  const err = document.getElementById("homeErr");
+  err.textContent = "";
+  const name = nameEl.value.trim();
+  const code = codeEl.value.trim().toUpperCase();
+  if (!name) { err.textContent = "Zadej nejdřív své jméno."; return; }
+  if (!code) { err.textContent = "Zadej kód lobby."; return; }
+  const lobby = await getLobby(code);
+  if (!lobby) { err.textContent = "Lobby s tímto kódem neexistuje."; return; }
+  if (lobby.status !== "waiting") { err.textContent = "Tenhle závod už běží, počkej na další kolo."; return; }
+  playerName = name; playerId = uid(); lobbyCode = code; isHost = false;
+  lobby.players[playerId] = { name: playerName, wpm: 0, acc: 100, progress: 0, finished: false, ready: false };
+  await setLobby(code, lobby);
+  enterLobbyScreen();
+});
+
+function enterLobbyScreen() {
+  document.getElementById("lobbyCodeDisplay").textContent = lobbyCode;
+  document.getElementById("startBtn").style.display = isHost ? "" : "none";
+  document.getElementById("waitHint").style.display = isHost ? "none" : "";
+  document.getElementById("lobbyHint").textContent = isHost
+    ? "Pošli tento kód ostatním hráčům a pak závod spusť."
+    : "Čekáš v lobby " + lobbyCode + ".";
+  show("lobby");
+  startPolling();
+}
+function renderPlayers(lobby) {
+  const list = document.getElementById("playerList");
+  list.innerHTML = "";
+  const entries = Object.entries(lobby.players || {});
+  entries.forEach(([pid, p]) => {
+    const li = document.createElement("li");
+    const hostTag = pid === lobby.hostId ? '<span class="tag">zakladatel</span>' : "";
+    const readyTag = '<span class="ready-tag ' + (p.ready ? "" : "notready") + '">' + (p.ready ? "připraven" : "čeká") + '</span>';
+    li.innerHTML = "<span>" + p.name + (pid === playerId ? " (ty)" : "") + "</span><span>" + hostTag + readyTag + "</span>";
+    list.appendChild(li);
+  });
+  const readyCount = entries.filter(([, p]) => p.ready).length;
+  document.getElementById("readyCount").textContent = readyCount + " / " + entries.length + " připraveno";
+  const me = lobby.players[playerId];
+  if (me) {
+    const btn = document.getElementById("readyBtn");
+    btn.textContent = me.ready ? "Zrušit připravenost" : "Jsem připraven";
+    btn.className = "btn-ready" + (me.ready ? "" : " off");
+  }
+}
+let lobbyListenerRef = null;
+function startPolling() {
+  stopPolling();
+  if (!lobbyCode) return;
+  lobbyListenerRef = fbdb.ref("lobby/" + lobbyCode);
+  lobbyListenerRef.on("value", (snap) => {
+    const lobby = snap.val();
+    if (!lobby) return;
+    if (document.getElementById("screen-lobby").style.display !== "none") {
+      renderPlayers(lobby);
+      if (lobby.status === "playing") beginCountdownFromLobby(lobby);
+    } else if (document.getElementById("screen-race").style.display !== "none") {
+      renderRaceTrack(lobby);
+    } else if (document.getElementById("screen-results").style.display !== "none") {
+      if (lobby.status === "waiting") { enterLobbyScreen(); return; }
+      renderResults(lobby);
+    }
+  });
+}
+function stopPolling() { if (lobbyListenerRef) { lobbyListenerRef.off(); lobbyListenerRef = null; } }
+
+document.getElementById("startBtn").addEventListener("click", async () => {
+  const lobby = await getLobby(lobbyCode);
+  if (!lobby) return;
+  lobby.status = "playing"; lobby.startTime = Date.now() + 3000;
+  await setLobby(lobbyCode, lobby);
+  beginCountdownFromLobby(lobby);
+});
+document.getElementById("leaveBtn").addEventListener("click", resetToHome);
+document.getElementById("againBtn").addEventListener("click", resetToHome);
+document.getElementById("readyBtn").addEventListener("click", async () => {
+  const lobby = await getLobby(lobbyCode);
+  if (!lobby || !lobby.players[playerId]) return;
+  lobby.players[playerId].ready = !lobby.players[playerId].ready;
+  await setLobby(lobbyCode, lobby);
+  renderPlayers(lobby);
+});
+document.getElementById("rematchBtn").addEventListener("click", async () => {
+  const lobby = await getLobby(lobbyCode);
+  if (!lobby) return;
+  lobby.status = "waiting"; lobby.startTime = null;
+  Object.values(lobby.players).forEach(p => { p.wpm = 0; p.acc = 100; p.progress = 0; p.finished = false; p.ready = false; });
+  await setLobby(lobbyCode, lobby);
+  enterLobbyScreen();
+});
+
+function pickRaceText(code) {
+  const rng = mulberry32(hashCode(code + ":" + Date.now().toString().slice(0,7)));
+  return RACE_TEXTS[Math.floor(rng() * RACE_TEXTS.length)];
+}
+
+function beginCountdownFromLobby(lobby) {
+  if (document.getElementById("screen-countdown").style.display !== "none"
+      || document.getElementById("screen-race").style.display !== "none") return;
+  stopPolling();
+  show("countdown");
+  raceSubmitted = false;
+  const target = lobby.startTime;
+  const dur = lobby.duration || 45000;
+  countdownTimer = setInterval(() => {
+    const remain = Math.ceil((target - Date.now()) / 1000);
+    if (remain <= 0) { clearInterval(countdownTimer); beginRacing(target, dur, lobby.code); }
+    else document.getElementById("countdownNum").textContent = remain;
+  }, 100);
+}
+
+function beginRacing(startTime, duration, code) {
+  show("race");
+  const textEl = document.getElementById("raceText");
+  const outerEl = document.getElementById("raceTextOuter");
+  const kbEl = document.getElementById("raceKeyboard");
+  buildKeyboard(kbEl);
+  const raceText = RACE_TEXTS[(hashCode(code + ":" + startTime) >>> 0) % RACE_TEXTS.length];
+  getLobby(lobbyCode).then(l => { if (l) renderRaceTrack(l); });
+  raceEngine = makeTypingEngine({
+    text: raceText, textEl, outerEl, keyboardEl: kbEl,
+    onRender: (state) => {
+      const pct = Math.round((state.pos / state.text.length) * 100);
+      document.getElementById("raceProgressLabel").textContent = state.pos + " / " + state.text.length + " znaků";
+      document.getElementById("raceProgressFill").style.width = pct + "%";
+      document.getElementById("raceProgressPct").textContent = pct + " %";
+    },
+    onProgress: async (state) => {
+      const now = Date.now();
+      if (now - lastProgressSent > 900) {
+        lastProgressSent = now;
+        const lobby = await getLobby(lobbyCode);
+        if (lobby && lobby.players[playerId]) {
+          const elapsed = state.startTime ? (now - state.startTime) : 0;
+          lobby.players[playerId].progress = Math.round((state.pos / state.text.length) * 100);
+          lobby.players[playerId].wpm = computeCpm(state.correctKeys, elapsed);
+          lobby.players[playerId].acc = computeAcc(state.correctKeys, state.totalKeys);
+          await setLobby(lobbyCode, lobby);
+        }
+      }
+    },
+    onFinish: async (state) => { await finishRace(state); }
+  });
+  const input = document.getElementById("raceInput");
+  input.value = "";
+  input.focus();
+  document.getElementById("screen-race").addEventListener("click", () => input.focus());
+  input.addEventListener("keydown", raceKeyHandler);
+
+  const endTime = startTime + duration;
+  gameTimer = setInterval(async () => {
+    const remainMs = endTime - Date.now();
+    if (remainMs <= 0) { clearInterval(gameTimer); if (!raceEngine.state.finished) await finishRace(raceEngine.state); }
+  }, 200);
+}
+function raceKeyHandler(e) {
+  if (e.key === "Backspace" || e.key.length === 1) {
+    e.preventDefault();
+    if (e.key.length === 1) raceEngine.onKey(e.key);
+  }
+}
+const RACER_ICONS = ["🐇","🐢","🦊","🐿️","🦔","🐈","🐕","🦉"];
+function renderRaceTrack(lobby) {
+  const el = document.getElementById("raceTrack");
+  el.innerHTML = "";
+  Object.entries(lobby.players || {}).forEach(([pid, p], i) => {
+    const pct = Math.min(100, p.progress || 0);
+    const lane = document.createElement("div");
+    lane.className = "lane";
+    lane.innerHTML =
+      '<div class="lane-label"><b>' + p.name + (pid === playerId ? " (ty)" : "") + '</b><span>' + (p.wpm || 0) + ' zn/min</span></div>'
+      + '<div class="lane-track"><div class="lane-progress" style="width:' + pct + '%"></div>'
+      + '<div class="lane-avatar" style="left:' + Math.min(94, pct) + '%">' + RACER_ICONS[i % RACER_ICONS.length] + '</div>'
+      + '<span class="flag">🏁</span></div>';
+    el.appendChild(lane);
+  });
+}
+async function finishRace(state) {
+  if (raceSubmitted) return;
+  raceSubmitted = true;
+  clearInterval(gameTimer);
+  const elapsed = state.startTime ? (Date.now() - state.startTime) : 1;
+  const wpm = computeCpm(state.correctKeys, elapsed);
+  const acc = computeAcc(state.correctKeys, state.totalKeys);
+  const progress = Math.round((state.pos / state.text.length) * 100);
+  const lobby = await getLobby(lobbyCode);
+  if (lobby && lobby.players[playerId]) {
+    lobby.players[playerId].wpm = wpm; lobby.players[playerId].acc = acc;
+    lobby.players[playerId].progress = progress; lobby.players[playerId].finished = state.finished;
+    await setLobby(lobbyCode, lobby);
+  }
+  if (state.finished) submitToLeaderboard(playerName || "Anonym", wpm, acc);
+  if (state.finished) recordResult({ cpm: wpm, acc, lessonId: "race", isRace: true, won: false, textLength: state.text.length });
+  const fresh = await getLobby(lobbyCode);
+  renderResults(fresh || lobby);
+  setTimeout(() => { show("results"); startPolling(); }, 650);
+}
+function renderResults(lobby) {
+  const list = document.getElementById("resultsList");
+  list.innerHTML = "";
+  const entries = Object.entries(lobby.players || {})
+    .map(([pid, p]) => ({ pid, ...p }))
+    .sort((a, b) => {
+      if (a.finished !== b.finished) return a.finished ? -1 : 1;
+      if (a.finished && b.finished) return b.wpm - a.wpm;
+      return (b.progress || 0) - (a.progress || 0);
+    });
+  entries.forEach((p, i) => {
+    const li = document.createElement("li");
+    if (i === 0) li.classList.add("podium-1");
+    const medal = i === 0 ? "🥇 " : i === 1 ? "🥈 " : i === 2 ? "🥉 " : "";
+    const detail = p.finished ? (p.wpm + " zn/min · " + p.acc + "%") : ((p.progress || 0) + "% textu");
+    li.innerHTML = '<span class="rank">' + medal + (i + 1) + '</span>'
+      + '<span class="lname">' + p.name + (p.pid === playerId ? " (ty)" : "") + '</span>'
+      + '<span class="lscore">' + detail + '</span>';
+    list.appendChild(li);
+  });
+  if (entries.length && entries[0].pid === playerId && entries[0].finished) {
+    fireConfetti();
+    checkChampionBadge(entries[0].wpm, entries[0].acc);
+  }
+}
+function resetToHome() {
+  stopPolling();
+  if (gameTimer) clearInterval(gameTimer);
+  if (countdownTimer) clearInterval(countdownTimer);
+  lobbyCode = null; playerId = null; isHost = false;
+  document.getElementById("homeErr").textContent = "";
+  show("home");
+}
+
+show("home");
+</script>
+</body>
+</html>
