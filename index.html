@@ -24,7 +24,10 @@
   firebase.initializeApp(firebaseConfig);
   window.addEventListener("load", function() {
     try {
-      firebase.appCheck().activate("6LeX0qktAAAAAGaQyzRsOGApf9Yb0Fy0il_qEZ1A", true);
+      firebase.appCheck().activate(
+        new firebase.appCheck.ReCaptchaEnterpriseProvider("6LcP2KktAAAAAEOJMNiRAuYHv9Zjbeb3k8gAecdt"),
+        true
+      );
     } catch (e) {
       console.warn("App Check se nepodařilo aktivovat (appka poběží dál bez něj):", e);
     }
