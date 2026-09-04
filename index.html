@@ -165,7 +165,13 @@
   .players li { display: flex; justify-content: space-between; padding: 9px 0; border-bottom: 1px solid var(--line); font-size: 14px; }
   .players li:last-child { border-bottom: none; }
   .tag { font-size: 11px; color: var(--tx2); background: #1c2030; padding: 3px 9px; border-radius: 20px; margin-right: 6px; }
-  .backlink { display: inline-block; margin-bottom: 14px; font-size: 13px; color: var(--tx2); cursor: pointer; }
+  .backlink {
+    display: inline-flex; align-items: center; gap: 6px; margin-bottom: 16px;
+    font-size: 14.5px; font-weight: 600; color: var(--tx); cursor: pointer;
+    background: #1c2030; border: 1px solid var(--line); border-radius: 10px; padding: 9px 16px;
+    transition: border-color 0.15s, background 0.15s;
+  }
+  .backlink:hover { border-color: var(--accent); background: #232838; }
   .backlink:hover { color: var(--tx); }
   .countdown {
     text-align: center; font-family: 'Space Grotesk', sans-serif; font-size: 72px; font-weight: 700; padding: 44px 0;
@@ -449,6 +455,7 @@
           <div class="stat"><div class="num" id="statLessons">0</div><div class="lbl">lekcí</div></div>
           <div class="stat"><div class="num" id="statTime">0 min</div><div class="lbl">čas psaní</div></div>
         </div>
+        <button class="btn-secondary" id="resetStatsBtn" style="margin-top:10px;">Vynulovat statistiky</button>
         <p class="lb-title" style="margin-top:4px;">🏅 Odznaky</p>
         <div class="badge-grid" id="badgeGrid"></div>
         <p class="lb-title" style="margin-top:20px;">🗓️ Denní úkoly</p>
@@ -830,6 +837,16 @@ document.getElementById("authNickBtn").addEventListener("click", async () => {
   profile.nickname = nick;
   await saveProfile(profile);
   renderProfile(profile);
+});
+document.getElementById("resetStatsBtn").addEventListener("click", async () => {
+  const ok = await showConfirm("Vynulovat statistiky?", "Průměrná rychlost, přesnost, počet lekcí a čas psaní se vynulují. Level, XP a odznaky zůstanou zachované.");
+  if (!ok) return;
+  const profile = await loadProfile();
+  profile.sumCpm = 0; profile.sumAcc = 0; profile.totalTimeMs = 0;
+  profile.lessonsCompleted = 0; profile.totalChars = 0; profile.perfectCount = 0;
+  await saveProfile(profile);
+  renderProfile(profile);
+  showToast("Statistiky vynulovány");
 });
 document.getElementById("authGoogleBtn").addEventListener("click", async () => {
   const err = document.getElementById("authErr");
