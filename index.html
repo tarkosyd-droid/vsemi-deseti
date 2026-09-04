@@ -248,7 +248,7 @@
   .xp-bar { height: 8px; border-radius: 20px; background: #1c2030; overflow: hidden; }
   .xp-fill { height: 100%; width: 0%; background: linear-gradient(90deg, var(--gold), var(--accent2)); transition: width 0.3s ease; }
   .badge-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; }
-  .badge { background: #12151f; border: 1px solid var(--line); border-radius: 12px; padding: 12px 6px; text-align: center; transition: transform 0.1s; }
+  .badge { background: #12151f; border: 1px solid var(--line); border-radius: 12px; padding: 12px 6px; text-align: center; transition: transform 0.1s; cursor: pointer; }
   .badge:hover { transform: translateY(-2px); }
   .badge.locked { opacity: 0.6; filter: grayscale(0.85); background: #171b26; border-color: #333a4a; }
   .badge .bi { font-size: 22px; margin-bottom: 6px; }
@@ -273,6 +273,9 @@
     box-shadow: 0 24px 70px -20px rgba(255,206,84,0.45);
   }
   .levelup-card .lu-icon { font-size: 50px; margin-bottom: 10px; }
+  .badge-detail-card .lu-icon img { width: 64px; height: 64px; object-fit: cover; border-radius: 50%; }
+  .badge-status { font-size: 13.5px; font-weight: 700; color: var(--tx2); margin: 10px 0 0; }
+  .badge-status.earned { color: var(--good); }
   .levelup-card .lu-title {
     font-family: 'Space Grotesk', sans-serif; font-size: 26px; font-weight: 700; margin: 0 0 6px;
     background: linear-gradient(90deg, var(--gold), var(--accent2));
@@ -899,6 +902,7 @@ function renderProfile(profile) {
     el.className = "badge" + (earned ? "" : " locked");
     el.title = b.name + " — " + b.desc;
     el.innerHTML = '<div class="bi">' + avatarValueHtml(b.icon) + '</div><div class="bn">' + b.name + '</div>';
+    el.addEventListener("click", () => showBadgeDetail(b, earned));
     gridEl.appendChild(el);
   });
   const lessonsCount = profile.lessonsCompleted || 0;
@@ -939,6 +943,18 @@ function askNickname() {
     overlay.querySelector("#nicknamePromptSave").addEventListener("click", submit);
     input.addEventListener("keydown", e => { if (e.key === "Enter") submit(); });
   });
+}
+function showBadgeDetail(b, earned) {
+  const overlay = document.createElement("div");
+  overlay.className = "levelup-overlay";
+  overlay.innerHTML = '<div class="levelup-card badge-detail-card" style="cursor:default;">'
+    + '<div class="lu-icon">' + avatarValueHtml(b.icon) + '</div>'
+    + '<p class="lu-title">' + b.name + '</p>'
+    + '<p class="lu-sub">' + b.desc + '</p>'
+    + '<p class="badge-status ' + (earned ? "earned" : "") + '">' + (earned ? "✅ Splněno" : "🔒 Zatím nesplněno") + '</p>'
+    + '</div>';
+  document.body.appendChild(overlay);
+  overlay.addEventListener("click", () => overlay.remove());
 }
 function badgeToastIcon(b) {
   return (b.icon && b.icon.indexOf("data:") === 0) ? "🏅" : b.icon;
