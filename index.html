@@ -1383,6 +1383,7 @@ function beginRacing(startTime, duration, code) {
           lobby.players[playerId].progress = Math.round((state.pos / state.text.length) * 100);
           lobby.players[playerId].wpm = computeCpm(state.correctKeys, elapsed);
           lobby.players[playerId].acc = computeAcc(state.correctKeys, state.totalKeys);
+          Object.assign(lobby.players[playerId], playerAvatarFields());
           await setLobby(lobbyCode, lobby);
         }
       }
@@ -1432,8 +1433,8 @@ async function finishRace(state) {
   const progress = Math.round((state.pos / state.text.length) * 100);
   const lobby = await getLobby(lobbyCode);
   if (lobby && lobby.players[playerId]) {
-    lobby.players[playerId].wpm = wpm; lobby.players[playerId].acc = acc;
-    lobby.players[playerId].progress = progress; lobby.players[playerId].finished = state.finished;
+    Object.assign(lobby.players[playerId], { wpm, acc, progress, finished: state.finished }, playerAvatarFields());
+    if (cachedProfile && cachedProfile.nickname) lobby.players[playerId].name = cachedProfile.nickname;
     await setLobby(lobbyCode, lobby);
   }
   if (state.finished) submitToLeaderboard((cachedProfile && cachedProfile.nickname) || playerName || "Anonym", wpm, acc);
