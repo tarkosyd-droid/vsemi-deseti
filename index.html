@@ -322,7 +322,7 @@
           <button class="board-tab" id="tabWeek">Tento týden</button>
         </div>
         <div id="homeLeaderboard"><p class="hint" style="margin:0;">Načítám…</p></div>
-        <p class="hint" style="margin-top:10px; margin-bottom:0;">Globální žebříček ze všech lekcí a závodů.</p>
+        <p class="hint" style="margin-top:10px; margin-bottom:0;">Počítají se jen Volný text, Dlouhé texty a závody — krátké dril lekce (řádky, čísla) se do žebříčku nezapočítávají, ať je to fér.</p>
       </div>
       <div class="card auth-card">
         <div id="authLoggedOut">
@@ -504,17 +504,17 @@ function flashKey(el, ch, ok) {
 
 /* ---------- lessons (real words, no diacritics) ---------- */
 const LESSONS = [
-  { id: "home", name: "Domácí řádka", texts: [
+  { id: "home", name: "Základní řádek", texts: [
     "asdf jklö sad dal had jak lak hlas hala sklad kladla skladal hlas sklad",
     "jak dal hlas sklad hala sad had lak kladla skladal dal sad had",
     "hlas hala sklad kladla skladal sad dal had jak lak asdf jklö"
   ]},
-  { id: "top", name: "Horní řádka", texts: [
+  { id: "top", name: "Horní řádek", texts: [
     "dopisy a fotografie ukládá do starého kufru a hledá tajný poklad ve staré skříni",
     "ráno jsem otevřel okno a uslyšel tiché kroky staré paní z horního patra",
     "u potoka rostly vysoké topoly a děti tam každé léto stavěly dřevěné loďky"
   ]},
-  { id: "bottom", name: "Spodní řádka", texts: [
+  { id: "bottom", name: "Spodní řádek", texts: [
     "za lesem najdeme starou chalupu s modrými okny a velkou zahradou plnou včel a motýlů",
     "medvěd se probudil ze zimního spánku a vydal se hledat první jarní bobule",
     "cvičenci na hřišti běhali kolem branky a povzbuzovali se hlasitým voláním"
@@ -1047,7 +1047,8 @@ function startSolo(lesson, text) {
       document.getElementById("againSoloBtn").textContent = "Jiná věta";
       const cpmDone = computeCpm(state.correctKeys, elapsed);
       const accDone = computeAcc(state.correctKeys, state.totalKeys);
-      submitToLeaderboard((cachedProfile && cachedProfile.nickname) || playerName || "Anonym", cpmDone, accDone);
+      const qualifiesForBoard = lesson.id === "long" || lesson.id === "free";
+      if (qualifiesForBoard) submitToLeaderboard((cachedProfile && cachedProfile.nickname) || playerName || "Anonym", cpmDone, accDone);
       recordResult({ cpm: cpmDone, acc: accDone, lessonId: lesson.id, isRace: false, won: false, textLength: state.text.length });
       setTimeout(() => show("solo-done"), 650);
     }
