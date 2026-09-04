@@ -324,8 +324,12 @@
         </div>
         <div id="authLoggedIn" style="display:none;">
           <p class="lb-title">🔐 Přihlášen</p>
-          <p class="hint" id="authUserEmail" style="margin:0 0 12px;"></p>
-          <button class="btn-secondary" id="authLogoutBtn" style="margin-bottom:0;">Odhlásit se</button>
+          <p class="hint" id="authUserEmail" style="margin:0 0 4px;"></p>
+          <p class="hint" id="authUserNick" style="margin:0 0 12px;"></p>
+          <div style="display:flex; gap:8px;">
+            <button class="btn-secondary" id="authNickBtn" style="margin-bottom:0;">Změnit přezdívku</button>
+            <button class="btn-secondary" id="authLogoutBtn" style="margin-bottom:0;">Odhlásit se</button>
+          </div>
         </div>
       </div>
       <div class="card profile-card">
@@ -686,6 +690,14 @@ document.getElementById("authRegisterBtn").addEventListener("click", async () =>
   catch (e) { err.textContent = translateAuthError(e); }
 });
 document.getElementById("authLogoutBtn").addEventListener("click", () => fbauth.signOut());
+document.getElementById("authNickBtn").addEventListener("click", async () => {
+  if (!currentUser) return;
+  const nick = await askNickname();
+  const profile = await loadProfile();
+  profile.nickname = nick;
+  await saveProfile(profile);
+  renderProfile(profile);
+});
 document.getElementById("authGoogleBtn").addEventListener("click", async () => {
   const err = document.getElementById("authErr");
   err.textContent = "";
@@ -700,7 +712,15 @@ fbauth.onAuthStateChanged(async (user) => {
       const snap = await fbdb.ref("users/" + user.uid + "/profile").get();
       if (!snap.exists()) {
         const localRaw = localStorage.getItem("profile:me");
-        if (localRaw) await fbdb.ref("users/" + user.uid + "/profile").set(JSON.parse(localRaw));
+        const migrated = localRaw ? JSON.parse(localRaw) : { xp: 0, streak: 0, lastActiveDate: null, badges: [], lessonsCompleted: 0 };
+        await fbdb.ref("users/" + user.uid + "/profile").set(migrated);
+      }
+      const freshSnap = await fbdb.ref("users/" + user.uid + "/profile").get();
+      const profile = freshSnap.val() || {};
+      if (!profile.nickname) {
+        const nick = await askNickname();
+        profile.nickname = nick;
+        await fbdb.ref("users/" + user.uid + "/profile").set(profile);
       }
     } catch (e) { /* ignorováno */ }
   }
@@ -722,6 +742,8 @@ function showToast(msg) {
 }
 function renderProfile(profile) {
   cachedProfile = profile;
+  const nickEl = document.getElementById("authUserNick");
+  if (nickEl) nickEl.textContent = profile.nickname ? "Přezdívka: " + profile.nickname : "";
   const xp = profile.xp || 0;
   const { level: lvl, into, need } = getLevelInfo(xp);
   const levelEl = document.getElementById("levelBadge");
@@ -748,6 +770,30 @@ function renderProfile(profile) {
 async function loadHomeProfile() {
   const profile = await loadProfile();
   renderProfile(profile);
+}
+function askNickname() {
+  return new Promise((resolve) => {
+    const overlay = document.createElement("div");
+    overlay.className = "levelup-overlay";
+    overlay.innerHTML = '<div class="levelup-card" style="cursor:default;">'
+      + '<div class="lu-icon">👋</div>'
+      + '<p class="lu-title">Jak se ti budeme říkat?</p>'
+      + '<p class="lu-sub" style="margin-bottom:14px;">Tahle přezdívka se bude zobrazovat v žebříčku a v závodech.</p>'
+      + '<input type="text" id="nicknamePromptInput" placeholder="Tvoje přezdívka" maxlength="16" style="text-align:center; margin-bottom:12px;">'
+      + '<button class="btn-primary" id="nicknamePromptSave" style="margin-bottom:0;">Uložit</button>'
+      + '</div>';
+    document.body.appendChild(overlay);
+    const input = overlay.querySelector("#nicknamePromptInput");
+    input.focus();
+    function submit() {
+      const val = input.value.trim();
+      if (!val) { input.focus(); return; }
+      overlay.remove();
+      resolve(val);
+    }
+    overlay.querySelector("#nicknamePromptSave").addEventListener("click", submit);
+    input.addEventListener("keydown", e => { if (e.key === "Enter") submit(); });
+  });
 }
 function showLevelUp(level) {
   const overlay = document.createElement("div");
@@ -971,7 +1017,7 @@ function startSolo(lesson, text) {
       document.getElementById("againSoloBtn").textContent = "Jiná věta";
       const cpmDone = computeCpm(state.correctKeys, elapsed);
       const accDone = computeAcc(state.correctKeys, state.totalKeys);
-      submitToLeaderboard(playerName || "Anonym", cpmDone, accDone);
+      submitToLeaderboard((cachedProfile && cachedProfile.nickname) || playerName || "Anonym", cpmDone, accDone);
       recordResult({ cpm: cpmDone, acc: accDone, lessonId: lesson.id, isRace: false, won: false, textLength: state.text.length });
       setTimeout(() => show("solo-done"), 650);
     }
@@ -1234,7 +1280,7 @@ async function finishRace(state) {
     lobby.players[playerId].progress = progress; lobby.players[playerId].finished = state.finished;
     await setLobby(lobbyCode, lobby);
   }
-  if (state.finished) submitToLeaderboard(playerName || "Anonym", wpm, acc);
+  if (state.finished) submitToLeaderboard((cachedProfile && cachedProfile.nickname) || playerName || "Anonym", wpm, acc);
   if (state.finished) recordResult({ cpm: wpm, acc, lessonId: "race", isRace: true, won: false, textLength: state.text.length });
   const fresh = await getLobby(lobbyCode);
   renderResults(fresh || lobby);
