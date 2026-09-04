@@ -1072,7 +1072,8 @@ async function submitToLeaderboard(name, cpm, acc) {
       const mine = list.filter(p => (p.key || p.name) === key);
       const others = list.filter(p => (p.key || p.name) !== key);
       const bestPrev = mine.reduce((m, p) => Math.max(m, p.cpm), 0);
-      list = cpm >= bestPrev ? others.concat([entry]) : others.concat([mine.find(p => p.cpm === bestPrev)]);
+      const merged = Object.assign({}, entry, { cpm: Math.max(cpm, bestPrev) });
+      list = others.concat([merged]);
       list.sort((a, b) => b.cpm - a.cpm);
       list = list.slice(0, 10);
       await fbdb.ref(path).set(list);
