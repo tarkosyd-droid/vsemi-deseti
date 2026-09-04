@@ -31,9 +31,11 @@
     --accent: #6f8cff; --accent2: #b06fff; --good: #4ee08a; --bad: #ff6b7d; --gold: #ffce54;
     --tx: #eef0f6; --tx2: #9aa1b4;
   }
+  html { overflow-x: hidden; }
   body {
     margin: 0; font-family: 'Inter', sans-serif; color: var(--tx);
     min-height: 100vh; display: flex; justify-content: center; align-items: center; padding: 40px 16px;
+    overflow-x: hidden;
     background:
       radial-gradient(1000px 500px at 15% -10%, #2a2560 0%, transparent 60%),
       radial-gradient(900px 500px at 110% 10%, #1c3d55 0%, transparent 55%),
@@ -194,14 +196,22 @@
   .progress-row .pct { color: var(--tx2); min-width: auto; }
   .progress-bar { flex: 1; height: 6px; border-radius: 20px; background: #1c2030; overflow: hidden; }
   .progress-fill { height: 100%; width: 0%; background: linear-gradient(90deg, var(--accent), var(--accent2)); transition: width 0.15s ease; }
-  .feature-strip { display: flex; gap: 10px; margin-top: 16px; flex-wrap: wrap; }
+  .feature-strip-label { font-size: 11px; color: var(--tx2); text-transform: uppercase; letter-spacing: 0.06em; margin: 16px 0 8px; }
+  .feature-strip { display: flex; gap: 10px; flex-wrap: wrap; }
   .feature-chip {
     flex: 1; min-width: 150px; display: flex; align-items: center; gap: 10px;
-    background: #12151f; border: 1px solid var(--line); border-radius: 12px; padding: 12px 14px;
-    font-size: 13px; color: var(--tx2);
+    background: transparent; border: 1px dashed var(--line); border-radius: 12px; padding: 11px 14px;
+    font-size: 12.5px; color: var(--tx2); cursor: default;
   }
-  .feature-chip .fi { font-size: 18px; }
-  .home-grid { display: flex; flex-direction: column; gap: 16px; }
+  .feature-chip .fi { font-size: 16px; opacity: 0.8; }
+  .goprofile-card:hover { border-color: var(--accent); transform: translateY(-2px); }
+  .goprofile-meta { font-size: 11.5px; color: var(--accent); font-weight: 600; margin-top: 6px; }
+  .goprofile-cta {
+    flex-shrink: 0; font-size: 13px; font-weight: 700; color: var(--accent);
+    background: rgba(111,140,255,0.12); border-radius: 20px; padding: 8px 14px;
+  }
+  .goprofile-cta span { margin-left: 2px; }
+  .home-grid { display: flex; flex-direction: column; gap: 12px; }
   .leaderboard-card { padding: 22px; }
   .lb-title { font-family: 'Space Grotesk', sans-serif; font-weight: 700; font-size: 16px; margin: 0 0 14px; }
   .leaderboard-card .leaderboard li { padding: 9px 2px; font-size: 13.5px; }
@@ -221,11 +231,13 @@
     position: absolute; right: -4px; bottom: -4px; background: #0e1017; border-radius: 50%; border: 2px solid #14161c;
     width: 26px; height: 26px; display: flex; align-items: center; justify-content: center; font-size: 15px;
   }
-  .podium-bar { border-radius: 8px 8px 0 0; background: #1c2030; }
+  .podium-bar { border-radius: 8px 8px 0 0; background: #1c2030; display: flex; align-items: flex-start; justify-content: center; padding-top: 6px; }
+  .podium-step-num { font-family: 'Space Grotesk', sans-serif; font-weight: 700; font-size: 15px; color: var(--tx2); }
   .podium-name { font-size: 11.5px; color: var(--tx2); margin: 6px 0 0; }
   .podium-score { font-size: 10.5px; color: var(--accent); font-family: 'JetBrains Mono', monospace; margin: 2px 0 0; }
   .podium-col.first .podium-medal { width: 64px; height: 64px; font-size: 26px; background: rgba(255,206,84,0.15); }
   .podium-col.first .podium-bar { width: 70px; height: 64px; background: rgba(255,206,84,0.12); }
+  .podium-col.first .podium-step-num { color: var(--gold); font-size: 17px; }
   .podium-col.first .podium-name { font-size: 12.5px; font-weight: 700; color: var(--gold); }
   .podium-col.second .podium-medal { width: 54px; height: 54px; font-size: 22px; }
   .podium-col.second .podium-bar { width: 64px; height: 46px; }
@@ -351,6 +363,7 @@
             <div class="d">Vytvoř lobby a piš stejný text v reálném čase na dráze.</div>
           </div>
         </div>
+        <p class="feature-strip-label">Co appka umí</p>
         <div class="feature-strip">
           <div class="feature-chip"><span class="fi">⌨️</span>Barevná klávesnice podle prstů</div>
           <div class="feature-chip"><span class="fi">📊</span>Živé znaky za minutu a přesnost</div>
@@ -364,14 +377,16 @@
           <button class="board-tab" id="tabWeek">Tento týden</button>
         </div>
         <div id="homeLeaderboard"><p class="hint" style="margin:0;">Načítám…</p></div>
-        <p class="hint" style="margin-top:10px; margin-bottom:0;">Počítají se jen Volné texty, dlouhé texty a závody (krátké dril lekce se do žebříčku nezapočítávají).</p>
+        <p class="hint" style="margin-top:16px; margin-bottom:0;">Počítají se jen Volné texty, dlouhé texty a závody (krátké dril lekce se do žebříčku nezapočítávají).</p>
       </div>
-      <div class="mode-btn" id="goProfile" style="display:flex; flex-direction:row; align-items:center; gap:14px; min-height:auto; padding:16px 18px;">
+      <div class="mode-btn goprofile-card" id="goProfile" style="display:flex; flex-direction:row; align-items:center; gap:14px; min-height:auto; padding:18px 20px;">
         <div class="ic" style="margin-bottom:0;">👤</div>
         <div style="flex:1;">
           <div class="t">Tvůj profil</div>
           <div class="d">Účet, level, XP, odznaky a denní úkoly.</div>
+          <div class="goprofile-meta" id="goProfileMeta"></div>
         </div>
+        <div class="goprofile-cta">Otevřít <span>→</span></div>
       </div>
     </div>
   </div>
@@ -833,6 +848,7 @@ fbauth.onAuthStateChanged(async (user) => {
     } catch (e) { /* ignorováno */ }
   }
   loadHomeProfile();
+  updateGoProfilePreview();
 });
 function updateStreak(profile) {
   const today = todayStr();
@@ -870,6 +886,9 @@ function renderProfile(profile) {
         opt.innerHTML = avatarValueHtml(a.img);
         opt.title = a.name;
         opt.addEventListener("click", async () => {
+          if (a.img === current && !profile.avatarUrl) return;
+          const ok = await showConfirm("Změnit profilovku?", "Nahradí se tvá současná profilovka ikonou „" + a.name + "“.");
+          if (!ok) return;
           profile.avatar = a.img;
           delete profile.avatarUrl;
           await saveProfile(profile);
@@ -942,6 +961,24 @@ function askNickname() {
     }
     overlay.querySelector("#nicknamePromptSave").addEventListener("click", submit);
     input.addEventListener("keydown", e => { if (e.key === "Enter") submit(); });
+  });
+}
+function showConfirm(title, message) {
+  return new Promise((resolve) => {
+    const overlay = document.createElement("div");
+    overlay.className = "levelup-overlay";
+    overlay.innerHTML = '<div class="levelup-card" style="cursor:default;">'
+      + '<div class="lu-icon">❓</div>'
+      + '<p class="lu-title" style="font-size:19px;">' + title + '</p>'
+      + '<p class="lu-sub" style="margin-bottom:16px;">' + message + '</p>'
+      + '<div style="display:flex; gap:10px;">'
+      + '<button class="btn-secondary" id="confirmNoBtn" style="margin-bottom:0;">Zrušit</button>'
+      + '<button class="btn-primary" id="confirmYesBtn" style="margin-bottom:0;">Ano, změnit</button>'
+      + '</div></div>';
+    document.body.appendChild(overlay);
+    overlay.querySelector("#confirmYesBtn").addEventListener("click", (e) => { e.stopPropagation(); overlay.remove(); resolve(true); });
+    overlay.querySelector("#confirmNoBtn").addEventListener("click", (e) => { e.stopPropagation(); overlay.remove(); resolve(false); });
+    overlay.addEventListener("click", () => { overlay.remove(); resolve(false); });
   });
 }
 function showBadgeDetail(b, earned) {
@@ -1143,6 +1180,9 @@ document.getElementById("avatarFileInput").addEventListener("change", async (e) 
   if (!file) return;
   try {
     const dataUrl = await compressImageToDataUrl(file, 128);
+    const previewHtml = '<img src="' + dataUrl + '" alt="náhled" style="width:72px;height:72px;border-radius:50%;object-fit:cover;display:block;margin:0 auto 10px;">Nastavit tuto fotku jako profilovku?';
+    const ok = await showConfirm("Změnit profilovku?", previewHtml);
+    if (!ok) { e.target.value = ""; return; }
     const profile = await loadProfile();
     profile.avatarUrl = dataUrl;
     await saveProfile(profile);
@@ -1183,24 +1223,39 @@ async function submitToLeaderboard(name, cpm, acc) {
   }
 }
 let boardScope = "all";
+async function updateGoProfilePreview() {
+  const el = document.getElementById("goProfileMeta");
+  if (!el) return;
+  if (!currentUser) { el.textContent = ""; return; }
+  const profile = await loadProfile();
+  const lvl = getLevelInfo(profile.xp || 0).level;
+  el.textContent = "Lv " + lvl + " · 🔥 " + (profile.streak || 0) + " dní";
+}
 async function loadHomeLeaderboard() {
   const el = document.getElementById("homeLeaderboard");
   if (!el) return;
   const path = boardScope === "week" ? "board/week/" + isoWeekKey(new Date()) : "board/top";
   try {
     const snap = await fbdb.ref(path).get();
-    const list = snap.exists() ? snap.val() : [];
+    const rawList = snap.exists() ? snap.val() : [];
+    const byPlayer = {};
+    rawList.forEach(p => {
+      const key = p.key || p.name;
+      if (!byPlayer[key] || p.cpm > byPlayer[key].cpm) byPlayer[key] = p;
+    });
+    const list = Object.values(byPlayer).sort((a, b) => b.cpm - a.cpm).slice(0, 10);
     if (!list.length) { el.innerHTML = '<p class="hint" style="margin:0;">Zatím žádné výsledky. Buď první!</p>'; return; }
     const top3 = list.slice(0, 3);
     const rest = list.slice(3, 10);
     const medal = ["🥇", "🥈", "🥉"];
+    const stepNum = ["1", "2", "3"];
     const cls = ["first", "second", "third"];
     const order = [1, 0, 2].filter(i => top3[i]);
     const podiumHtml = '<div class="podium-row">' + order.map(i => {
       const p = top3[i];
       return '<div class="podium-col ' + cls[i] + '">'
         + '<div class="podium-medal"><div class="podium-avatar-inner">' + avatarInner(p) + '</div><span class="medal-badge">' + medal[i] + '</span></div>'
-        + '<div class="podium-bar"></div>'
+        + '<div class="podium-bar"><span class="podium-step-num">' + stepNum[i] + '</span></div>'
         + '<p class="podium-name">' + p.name + '</p>'
         + '<p class="podium-score">' + p.cpm + ' zn/min</p>'
         + '</div>';
@@ -1231,7 +1286,7 @@ function show(id) {
   ["home","lessons","solo","solo-done","race-home","lobby","countdown","race","results","profile"].forEach(s => {
     document.getElementById("screen-" + s).style.display = (s === id) ? "" : "none";
   });
-  if (id === "home") loadHomeLeaderboard();
+  if (id === "home") { loadHomeLeaderboard(); updateGoProfilePreview(); }
   if (id === "profile") loadHomeProfile();
 }
 document.getElementById("goProfile").addEventListener("click", () => show("profile"));
