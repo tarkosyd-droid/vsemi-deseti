@@ -78,6 +78,8 @@
   .btn-primary:hover { filter: brightness(1.08); }
   .btn-secondary { background: #1c2030; border: 1px solid var(--line); color: var(--tx); width: 100%; margin-bottom: 10px; }
   .btn-secondary:hover { background: #232838; }
+  .btn-danger { background: rgba(255,107,125,0.12); color: var(--bad); border: 1px solid rgba(255,107,125,0.35); }
+  .btn-danger:hover { background: rgba(255,107,125,0.2); }
   .btn-primary:disabled, .btn-secondary:disabled { opacity: 0.4; cursor: not-allowed; }
   .err { color: var(--bad); font-size: 13px; min-height: 18px; margin: -4px 0 10px; }
   .auth-divider { display: flex; align-items: center; gap: 10px; margin: 4px 0 12px; }
@@ -270,8 +272,9 @@
   .profile-avatar-row { display: flex; align-items: center; gap: 14px; margin-bottom: 14px; }
   .avatar-circle-lg {
     width: 56px; height: 56px; border-radius: 50%; background: #1c2030; border: 1px solid var(--line);
-    display: flex; align-items: center; justify-content: center; font-size: 26px; flex-shrink: 0;
+    display: flex; align-items: center; justify-content: center; font-size: 26px; flex-shrink: 0; overflow: hidden;
   }
+  .avatar-circle-lg img { width: 100%; height: 100%; object-fit: cover; border-radius: 50%; }
   .avatar-picker { display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 14px; }
   .avatar-opt {
     width: 36px; height: 36px; border-radius: 50%; display: flex; align-items: center; justify-content: center;
@@ -365,12 +368,14 @@
         </div>
         <div id="authLoggedIn" style="display:none;">
           <div class="profile-avatar-row">
-            <div class="avatar-circle-lg" id="profileAvatarCircle">🙂</div>
+            <div class="avatar-circle-lg" id="profileAvatarCircle" style="cursor:pointer;" title="Klikni a nahraj vlastní fotku">🙂</div>
             <div>
               <p class="hint" id="authUserEmail" style="margin:0 0 2px;"></p>
               <p class="hint" id="authUserNick" style="margin:0;"></p>
             </div>
           </div>
+          <input type="file" id="avatarFileInput" accept="image/*" style="display:none;">
+          <p class="hint" style="margin:-6px 0 10px;">Klikni na profilovku a nahraj vlastní fotku, nebo vyber emoji.</p>
           <div class="avatar-picker" id="profileAvatarPicker"></div>
           <button class="btn-secondary" id="authNickBtn" style="margin-bottom:0;">Změnit přezdívku</button>
         </div>
@@ -387,7 +392,7 @@
         <p class="lb-title" style="margin-top:20px;">🗓️ Denní úkoly</p>
         <div class="quest-list" id="questList"></div>
     </div>
-    <button class="btn-secondary" id="authLogoutBtn" style="display:none;">Odhlásit se</button>
+    <button class="btn-danger" id="authLogoutBtn" style="display:none;">Odhlásit se</button>
   </div>
 
   <div id="screen-lessons" class="card" style="display:none;">
@@ -812,15 +817,20 @@ function renderProfile(profile) {
   const avatarCircle = document.getElementById("profileAvatarCircle");
   const avatarPicker = document.getElementById("profileAvatarPicker");
   if (avatarCircle && avatarPicker) {
+    if (profile.avatarUrl) {
+      avatarCircle.innerHTML = '<img src="' + profile.avatarUrl + '" alt="profilovka">';
+    } else {
+      avatarCircle.textContent = profile.avatar || AVATAR_OPTIONS[0];
+    }
     const current = profile.avatar || AVATAR_OPTIONS[0];
-    avatarCircle.textContent = current;
     avatarPicker.innerHTML = "";
     AVATAR_OPTIONS.forEach(a => {
       const opt = document.createElement("div");
-      opt.className = "avatar-opt" + (a === current ? " selected" : "");
+      opt.className = "avatar-opt" + (!profile.avatarUrl && a === current ? " selected" : "");
       opt.textContent = a;
       opt.addEventListener("click", async () => {
         profile.avatar = a;
+        delete profile.avatarUrl;
         await saveProfile(profile);
         renderProfile(profile);
       });
@@ -994,6 +1004,43 @@ function renderQuests(dailyQuests) {
       + '<div class="quest-bar"><div class="quest-fill" style="width:' + pct + '%"></div></div></div></div>';
   }).join("");
 }
+
+function compressImageToDataUrl(file, size) {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = (ev) => {
+      const img = new Image();
+      img.onload = () => {
+        const canvas = document.createElement("canvas");
+        canvas.width = size; canvas.height = size;
+        const ctx = canvas.getContext("2d");
+        const minDim = Math.min(img.width, img.height);
+        const sx = (img.width - minDim) / 2, sy = (img.height - minDim) / 2;
+        ctx.drawImage(img, sx, sy, minDim, minDim, 0, 0, size, size);
+        resolve(canvas.toDataURL("image/jpeg", 0.75));
+      };
+      img.onerror = reject;
+      img.src = ev.target.result;
+    };
+    reader.onerror = reject;
+    reader.readAsDataURL(file);
+  });
+}
+document.getElementById("profileAvatarCircle").addEventListener("click", () => {
+  document.getElementById("avatarFileInput").click();
+});
+document.getElementById("avatarFileInput").addEventListener("change", async (e) => {
+  const file = e.target.files[0];
+  if (!file) return;
+  try {
+    const dataUrl = await compressImageToDataUrl(file, 128);
+    const profile = await loadProfile();
+    profile.avatarUrl = dataUrl;
+    await saveProfile(profile);
+    renderProfile(profile);
+  } catch (err) { /* nahrání se nezdařilo, ignorováno */ }
+  e.target.value = "";
+});
 
 async function submitToLeaderboard(name, cpm, acc) {
   if (!name || !cpm) return;
