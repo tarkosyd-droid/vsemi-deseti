@@ -323,7 +323,19 @@
         <div id="homeLeaderboard"><p class="hint" style="margin:0;">Načítám…</p></div>
         <p class="hint" style="margin-top:10px; margin-bottom:0;">Počítají se jen Volné texty, dlouhé texty a závody (krátké dril lekce se do žebříčku nezapočítávají).</p>
       </div>
-      <div class="card auth-card">
+      <div class="mode-btn" id="goProfile" style="display:flex; flex-direction:row; align-items:center; gap:14px; min-height:auto; padding:16px 18px;">
+        <div class="ic" style="margin-bottom:0;">👤</div>
+        <div style="flex:1;">
+          <div class="t">Tvůj profil</div>
+          <div class="d">Účet, level, XP, odznaky a denní úkoly.</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div id="screen-profile" class="card" style="display:none;">
+    <span class="backlink" data-back="home">← zpět</span>
+    <div class="card auth-card" style="margin-bottom:16px;">
         <div id="authLoggedOut">
           <p class="lb-title">🔐 Účet</p>
           <input type="text" id="authEmail" placeholder="E-mail" autocomplete="username">
@@ -349,8 +361,8 @@
             <button class="btn-secondary" id="authLogoutBtn" style="margin-bottom:0;">Odhlásit se</button>
           </div>
         </div>
-      </div>
-      <div class="card profile-card">
+    </div>
+    <div class="card profile-card">
         <div class="profile-head">
           <div class="level-badge" id="levelBadge">Lv 1</div>
           <div class="xp-wrap">
@@ -361,7 +373,6 @@
         <div class="badge-grid" id="badgeGrid"></div>
         <p class="lb-title" style="margin-top:20px;">🗓️ Denní úkoly</p>
         <div class="quest-list" id="questList"></div>
-      </div>
     </div>
   </div>
 
@@ -1009,11 +1020,13 @@ document.getElementById("tabWeek").addEventListener("click", () => {
 
 /* ---------- screen management ---------- */
 function show(id) {
-  ["home","lessons","solo","solo-done","race-home","lobby","countdown","race","results"].forEach(s => {
+  ["home","lessons","solo","solo-done","race-home","lobby","countdown","race","results","profile"].forEach(s => {
     document.getElementById("screen-" + s).style.display = (s === id) ? "" : "none";
   });
-  if (id === "home") { loadHomeLeaderboard(); loadHomeProfile(); }
+  if (id === "home") loadHomeLeaderboard();
+  if (id === "profile") loadHomeProfile();
 }
+document.getElementById("goProfile").addEventListener("click", () => show("profile"));
 document.querySelectorAll("[data-back]").forEach(el => { el.addEventListener("click", () => show(el.dataset.back)); });
 
 /* ---------- solo practice ---------- */
