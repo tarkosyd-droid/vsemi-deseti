@@ -947,12 +947,16 @@ function renderQuests(dailyQuests) {
 
 async function submitToLeaderboard(name, cpm, acc) {
   if (!name || !cpm) return;
-  const entry = { name, cpm, acc, ts: Date.now() };
+  const key = currentUser ? currentUser.uid : name;
+  const entry = { name, cpm, acc, ts: Date.now(), key };
   for (const path of ["board/top", "board/week/" + isoWeekKey(new Date())]) {
     try {
       const snap = await fbdb.ref(path).get();
       let list = snap.exists() ? snap.val() : [];
-      list.push(entry);
+      const mine = list.filter(p => (p.key || p.name) === key);
+      const others = list.filter(p => (p.key || p.name) !== key);
+      const bestPrev = mine.reduce((m, p) => Math.max(m, p.cpm), 0);
+      list = cpm >= bestPrev ? others.concat([entry]) : others.concat([mine.find(p => p.cpm === bestPrev)]);
       list.sort((a, b) => b.cpm - a.cpm);
       list = list.slice(0, 10);
       await fbdb.ref(path).set(list);
