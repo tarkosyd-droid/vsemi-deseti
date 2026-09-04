@@ -179,7 +179,11 @@
     border: 1px solid var(--line);
   }
   .lane-progress { position: absolute; top:0; left:0; height: 100%; background: linear-gradient(90deg, rgba(111,140,255,0.12), rgba(176,111,255,0.22)); width: 0%; transition: width 0.25s ease; }
-  .lane-avatar { position: absolute; top: 50%; transform: translate(-50%, -50%); left: 0%; transition: left 0.25s ease; font-size: 19px; filter: drop-shadow(0 2px 4px rgba(0,0,0,0.5)); }
+  .lane-avatar {
+    position: absolute; top: 50%; width: 14px; height: 14px; border-radius: 50%;
+    transform: translate(-50%, -50%); left: 0%; transition: left 0.25s ease;
+    background: var(--accent); box-shadow: 0 0 8px rgba(111,140,255,0.7); border: 2px solid #0e1017;
+  }
   .flag { position: absolute; right: 8px; top: 50%; transform: translateY(-50%); font-size: 15px; opacity: 0.7; }
   .leaderboard { list-style: none; margin: 0; padding: 0; }
   .leaderboard li { display: flex; align-items: center; gap: 10px; padding: 12px 4px; border-bottom: 1px solid var(--line); font-size: 14px; border-radius: 10px; }
@@ -322,7 +326,7 @@
           <button class="board-tab" id="tabWeek">Tento týden</button>
         </div>
         <div id="homeLeaderboard"><p class="hint" style="margin:0;">Načítám…</p></div>
-        <p class="hint" style="margin-top:10px; margin-bottom:0;">Počítají se jen Volný text, Dlouhé texty a závody — krátké dril lekce (řádky, čísla) se do žebříčku nezapočítávají, ať je to fér.</p>
+        <p class="hint" style="margin-top:10px; margin-bottom:0;">Počítají se jen Volné texty, dlouhé texty a závody (krátké dril lekce se do žebříčku nezapočítávají).</p>
       </div>
       <div class="card auth-card">
         <div id="authLoggedOut">
@@ -381,7 +385,7 @@
     <div class="progress-row" id="soloProgressRow">
       <span id="soloProgressLabel">0 / 0 znaků</span>
       <div class="progress-bar"><div class="progress-fill" id="soloProgressFill"></div></div>
-      <span class="pct" id="soloProgressPct">0 %</span>
+      
     </div>
     <div class="text-display" id="soloTextOuter"><div class="text-track" id="soloText"></div></div>
     <div class="keyboard" id="soloKeyboard"></div>
@@ -402,8 +406,6 @@
 
   <div id="screen-race-home" class="card" style="display:none;">
     <span class="backlink" data-back="home">← zpět</span>
-    <label for="nameInput">Tvoje jméno</label>
-    <input type="text" id="nameInput" placeholder="např. Daniel" maxlength="16">
     <button class="btn-primary" id="createBtn">Vytvořit lobby</button>
     <label for="joinCode" style="margin-top:6px;">Nebo zadej kód lobby</label>
     <input type="text" id="joinCode" placeholder="např. AB3X" maxlength="4">
@@ -433,7 +435,7 @@
     <div class="progress-row" id="raceProgressRow">
       <span id="raceProgressLabel">0 / 0 znaků</span>
       <div class="progress-bar"><div class="progress-fill" id="raceProgressFill"></div></div>
-      <span class="pct" id="raceProgressPct">0 %</span>
+      
     </div>
     <div class="text-display" id="raceTextOuter"><div class="text-track" id="raceText"></div></div>
     <div class="keyboard" id="raceKeyboard"></div>
@@ -1030,7 +1032,6 @@ function startSolo(lesson, text) {
       const pct = Math.round((state.pos / state.text.length) * 100);
       document.getElementById("soloProgressLabel").textContent = state.pos + " / " + state.text.length + " znaků";
       document.getElementById("soloProgressFill").style.width = pct + "%";
-      document.getElementById("soloProgressPct").textContent = pct + " %";
     },
     onProgress: (state) => {
       const elapsed = state.startTime ? (Date.now() - state.startTime) : 0;
@@ -1100,13 +1101,14 @@ let raceEngine = null, raceSubmitted = false, lastProgressSent = 0;
 
 document.getElementById("goRace").addEventListener("click", () => show("race-home"));
 
+function autoPlayerName() {
+  if (cachedProfile && cachedProfile.nickname) return cachedProfile.nickname;
+  return "Hráč " + Math.floor(1000 + Math.random() * 9000);
+}
 document.getElementById("createBtn").addEventListener("click", async () => {
-  const nameEl = document.getElementById("nameInput");
   const err = document.getElementById("homeErr");
   err.textContent = "";
-  const name = nameEl.value.trim();
-  if (!name) { err.textContent = "Zadej nejdřív své jméno."; return; }
-  playerName = name; playerId = uid(); lobbyCode = randomCode(); isHost = true;
+  playerName = autoPlayerName(); playerId = uid(); lobbyCode = randomCode(); isHost = true;
   const lobby = {
     code: lobbyCode, hostId: playerId, status: "waiting", startTime: null, duration: 45000,
     players: { [playerId]: { name: playerName, wpm: 0, acc: 100, progress: 0, finished: false, ready: false } },
@@ -1118,18 +1120,15 @@ document.getElementById("createBtn").addEventListener("click", async () => {
 });
 
 document.getElementById("joinBtn").addEventListener("click", async () => {
-  const nameEl = document.getElementById("nameInput");
   const codeEl = document.getElementById("joinCode");
   const err = document.getElementById("homeErr");
   err.textContent = "";
-  const name = nameEl.value.trim();
   const code = codeEl.value.trim().toUpperCase();
-  if (!name) { err.textContent = "Zadej nejdřív své jméno."; return; }
   if (!code) { err.textContent = "Zadej kód lobby."; return; }
   const lobby = await getLobby(code);
   if (!lobby) { err.textContent = "Lobby s tímto kódem neexistuje."; return; }
   if (lobby.status !== "waiting") { err.textContent = "Tenhle závod už běží, počkej na další kolo."; return; }
-  playerName = name; playerId = uid(); lobbyCode = code; isHost = false;
+  playerName = autoPlayerName(); playerId = uid(); lobbyCode = code; isHost = false;
   lobby.players[playerId] = { name: playerName, wpm: 0, acc: 100, progress: 0, finished: false, ready: false };
   await setLobby(code, lobby);
   enterLobbyScreen();
@@ -1233,6 +1232,7 @@ function beginCountdownFromLobby(lobby) {
 
 function beginRacing(startTime, duration, code) {
   show("race");
+  startPolling();
   const textEl = document.getElementById("raceText");
   const outerEl = document.getElementById("raceTextOuter");
   const kbEl = document.getElementById("raceKeyboard");
@@ -1245,7 +1245,6 @@ function beginRacing(startTime, duration, code) {
       const pct = Math.round((state.pos / state.text.length) * 100);
       document.getElementById("raceProgressLabel").textContent = state.pos + " / " + state.text.length + " znaků";
       document.getElementById("raceProgressFill").style.width = pct + "%";
-      document.getElementById("raceProgressPct").textContent = pct + " %";
     },
     onProgress: async (state) => {
       const now = Date.now();
@@ -1281,7 +1280,6 @@ function raceKeyHandler(e) {
     if (e.key.length === 1) raceEngine.onKey(e.key);
   }
 }
-const RACER_ICONS = ["🐇","🐢","🦊","🐿️","🦔","🐈","🐕","🦉"];
 function renderRaceTrack(lobby) {
   const el = document.getElementById("raceTrack");
   el.innerHTML = "";
@@ -1292,7 +1290,7 @@ function renderRaceTrack(lobby) {
     lane.innerHTML =
       '<div class="lane-label"><b>' + p.name + (pid === playerId ? " (ty)" : "") + '</b><span>' + (p.wpm || 0) + ' zn/min</span></div>'
       + '<div class="lane-track"><div class="lane-progress" style="width:' + pct + '%"></div>'
-      + '<div class="lane-avatar" style="left:' + Math.min(94, pct) + '%">' + RACER_ICONS[i % RACER_ICONS.length] + '</div>'
+      + '<div class="lane-avatar" style="left:' + Math.min(96, pct) + '%"></div>'
       + '<span class="flag">🏁</span></div>';
     el.appendChild(lane);
   });
