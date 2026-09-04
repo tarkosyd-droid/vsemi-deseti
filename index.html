@@ -22,11 +22,13 @@
     appId: "1:93880412317:web:6df9c396792ef0efefcc74"
   };
   firebase.initializeApp(firebaseConfig);
-  try {
-    firebase.appCheck().activate("6LeX0qktAAAAAGaQyzRsOGApf9Yb0Fy0il_qEZ1A", true);
-  } catch (e) {
-    console.warn("App Check se nepodařilo aktivovat (appka poběží dál bez něj):", e);
-  }
+  window.addEventListener("load", function() {
+    try {
+      firebase.appCheck().activate("6LeX0qktAAAAAGaQyzRsOGApf9Yb0Fy0il_qEZ1A", true);
+    } catch (e) {
+      console.warn("App Check se nepodařilo aktivovat (appka poběží dál bez něj):", e);
+    }
+  });
   const fbdb = firebase.database();
   const fbauth = firebase.auth();
 </script>
