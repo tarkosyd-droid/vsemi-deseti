@@ -713,7 +713,7 @@ document.getElementById("authLoginBtn").addEventListener("click", async () => {
   const err = document.getElementById("authErr");
   err.textContent = "";
   try { await fbauth.signInWithEmailAndPassword(email, pass); }
-  catch (e) { err.textContent = translateAuthError(e); }
+  catch (e) { console.error("Auth error:", e.code, e.message); err.textContent = translateAuthError(e); }
 });
 document.getElementById("authRegisterBtn").addEventListener("click", async () => {
   const email = document.getElementById("authEmail").value.trim();
@@ -721,7 +721,7 @@ document.getElementById("authRegisterBtn").addEventListener("click", async () =>
   const err = document.getElementById("authErr");
   err.textContent = "";
   try { await fbauth.createUserWithEmailAndPassword(email, pass); }
-  catch (e) { err.textContent = translateAuthError(e); }
+  catch (e) { console.error("Auth error:", e.code, e.message); err.textContent = translateAuthError(e); }
 });
 document.getElementById("authLogoutBtn").addEventListener("click", () => fbauth.signOut());
 document.getElementById("authNickBtn").addEventListener("click", async () => {
@@ -736,7 +736,7 @@ document.getElementById("authGoogleBtn").addEventListener("click", async () => {
   const err = document.getElementById("authErr");
   err.textContent = "";
   try { await fbauth.signInWithPopup(new firebase.auth.GoogleAuthProvider()); }
-  catch (e) { err.textContent = translateAuthError(e); }
+  catch (e) { console.error("Auth error:", e.code, e.message); err.textContent = translateAuthError(e); }
 });
 fbauth.onAuthStateChanged(async (user) => {
   currentUser = user;
