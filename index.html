@@ -9,6 +9,7 @@
 <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;700&family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@500;700&display=swap" rel="stylesheet">
 <script src="https://cdnjs.cloudflare.com/ajax/libs/firebase/10.13.2/firebase-app-compat.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/firebase/10.13.2/firebase-database-compat.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/firebase/10.13.2/firebase-auth-compat.min.js"></script>
 <script>
   const firebaseConfig = {
     apiKey: "AIzaSyDYMFmP5A-PP76xrXNtcXOrVdptEzb5154",
@@ -21,6 +22,7 @@
   };
   firebase.initializeApp(firebaseConfig);
   const fbdb = firebase.database();
+  const fbauth = firebase.auth();
 </script>
 <style>
   * { box-sizing: border-box; }
@@ -57,12 +59,12 @@
   }
   @keyframes fadeIn { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: none; } }
   label { display: block; font-size: 12px; color: var(--tx2); margin-bottom: 6px; text-transform: uppercase; letter-spacing: 0.06em; }
-  input[type=text] {
+  input[type=text], input[type=password] {
     width: 100%; font-size: 16px; padding: 12px 14px; border-radius: 10px; margin-bottom: 14px;
     border: 1px solid var(--line); background: #0e1017; color: var(--tx); outline: none;
     transition: border-color 0.15s, box-shadow 0.15s;
   }
-  input[type=text]:focus { border-color: var(--accent); box-shadow: 0 0 0 3px rgba(111,140,255,0.18); }
+  input[type=text]:focus, input[type=password]:focus { border-color: var(--accent); box-shadow: 0 0 0 3px rgba(111,140,255,0.18); }
   input#joinCode { text-transform: uppercase; letter-spacing: 3px; font-family: 'JetBrains Mono', monospace; }
   button {
     font-family: 'Inter', sans-serif; font-size: 14.5px; font-weight: 600; padding: 13px 16px;
@@ -78,6 +80,14 @@
   .btn-secondary:hover { background: #232838; }
   .btn-primary:disabled, .btn-secondary:disabled { opacity: 0.4; cursor: not-allowed; }
   .err { color: var(--bad); font-size: 13px; min-height: 18px; margin: -4px 0 10px; }
+  .auth-divider { display: flex; align-items: center; gap: 10px; margin: 4px 0 12px; }
+  .auth-divider::before, .auth-divider::after { content: ""; flex: 1; height: 1px; background: var(--line); }
+  .auth-divider span { font-size: 11.5px; color: var(--tx2); }
+  .btn-google {
+    width: 100%; display: flex; align-items: center; justify-content: center; gap: 10px;
+    background: #fff; color: #1f1f1f; border: 1px solid #d8d8d8; margin-bottom: 0;
+  }
+  .btn-google:hover { background: #f4f4f4; }
   .mode-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
   .mode-btn {
     background: linear-gradient(160deg, #171b26, #12151f); border: 1px solid var(--line); border-radius: 18px;
@@ -294,6 +304,29 @@
         </div>
         <ul class="leaderboard" id="homeLeaderboard"><p class="hint" style="margin:0;">Načítám…</p></ul>
         <p class="hint" style="margin-top:10px; margin-bottom:0;">Globální žebříček ze všech lekcí a závodů.</p>
+      </div>
+      <div class="card auth-card">
+        <div id="authLoggedOut">
+          <p class="lb-title">🔐 Účet</p>
+          <input type="text" id="authEmail" placeholder="E-mail" autocomplete="username">
+          <input type="password" id="authPassword" placeholder="Heslo (min. 6 znaků)" autocomplete="current-password">
+          <div style="display:flex; gap:8px;">
+            <button class="btn-primary" id="authLoginBtn" style="margin-bottom:0;">Přihlásit</button>
+            <button class="btn-secondary" id="authRegisterBtn" style="margin-bottom:0;">Registrovat</button>
+          </div>
+          <p class="err" id="authErr"></p>
+          <div class="auth-divider"><span>nebo</span></div>
+          <button class="btn-google" id="authGoogleBtn">
+            <svg width="18" height="18" viewBox="0 0 48 48"><path fill="#FFC107" d="M43.6 20.5H42V20H24v8h11.3C33.7 32.7 29.3 36 24 36c-6.6 0-12-5.4-12-12s5.4-12 12-12c3.1 0 5.9 1.2 8 3.1l5.7-5.7C34.6 6.1 29.6 4 24 4 12.9 4 4 12.9 4 24s8.9 20 20 20 20-8.9 20-20c0-1.3-.1-2.7-.4-3.5z"/><path fill="#FF3D00" d="M6.3 14.7l6.6 4.8C14.6 15.9 18.9 13 24 13c3.1 0 5.9 1.2 8 3.1l5.7-5.7C34.6 6.1 29.6 4 24 4 16.3 4 9.6 8.3 6.3 14.7z"/><path fill="#4CAF50" d="M24 44c5.5 0 10.5-2.1 14.3-5.6l-6.6-5.6C29.6 34.7 27 35.5 24 35.5c-5.3 0-9.7-3.3-11.3-8l-6.6 5.1C9.5 39.6 16.2 44 24 44z"/><path fill="#1976D2" d="M43.6 20.5H42V20H24v8h11.3c-.8 2.3-2.3 4.3-4.2 5.8l6.6 5.6C39.9 37.7 44 31.9 44 24c0-1.3-.1-2.7-.4-3.5z"/></svg>
+            Pokračovat přes Google
+          </button>
+          <p class="hint" style="margin-top:8px;">Bez účtu se postup ukládá jen v tomhle prohlížeči.</p>
+        </div>
+        <div id="authLoggedIn" style="display:none;">
+          <p class="lb-title">🔐 Přihlášen</p>
+          <p class="hint" id="authUserEmail" style="margin:0 0 12px;"></p>
+          <button class="btn-secondary" id="authLogoutBtn" style="margin-bottom:0;">Odhlásit se</button>
+        </div>
       </div>
       <div class="card profile-card">
         <div class="profile-head">
@@ -594,15 +627,85 @@ function getLevelInfo(xp) {
   return { level, into: remaining, need };
 }
 function todayStr() { return new Date().toISOString().slice(0, 10); }
+let currentUser = null;
 async function loadProfile() {
+  const empty = { xp: 0, streak: 0, lastActiveDate: null, badges: [], lessonsCompleted: 0 };
   try {
+    if (currentUser) {
+      const snap = await fbdb.ref("users/" + currentUser.uid + "/profile").get();
+      return snap.exists() ? snap.val() : empty;
+    }
     const raw = localStorage.getItem("profile:me");
-    return raw ? JSON.parse(raw) : { xp: 0, streak: 0, lastActiveDate: null, badges: [], lessonsCompleted: 0 };
-  } catch (e) { return { xp: 0, streak: 0, lastActiveDate: null, badges: [], lessonsCompleted: 0 }; }
+    return raw ? JSON.parse(raw) : empty;
+  } catch (e) { return empty; }
 }
 async function saveProfile(p) {
-  try { localStorage.setItem("profile:me", JSON.stringify(p)); } catch (e) { /* ignorováno */ }
+  try {
+    if (currentUser) { await fbdb.ref("users/" + currentUser.uid + "/profile").set(p); }
+    else { localStorage.setItem("profile:me", JSON.stringify(p)); }
+  } catch (e) { /* ignorováno */ }
 }
+function updateAuthUI() {
+  const out = document.getElementById("authLoggedOut");
+  const inn = document.getElementById("authLoggedIn");
+  if (!out) return;
+  if (currentUser) {
+    out.style.display = "none";
+    inn.style.display = "";
+    document.getElementById("authUserEmail").textContent = currentUser.email;
+  } else {
+    out.style.display = "";
+    inn.style.display = "none";
+  }
+}
+function translateAuthError(e) {
+  const code = (e && e.code) || "";
+  if (code.includes("email-already-in-use")) return "Tenhle e-mail už je zaregistrovaný.";
+  if (code.includes("invalid-email")) return "Neplatný e-mail.";
+  if (code.includes("weak-password")) return "Heslo musí mít aspoň 6 znaků.";
+  if (code.includes("wrong-password") || code.includes("invalid-credential")) return "Špatný e-mail nebo heslo.";
+  if (code.includes("user-not-found")) return "Účet s tímhle e-mailem neexistuje.";
+  if (code.includes("popup-closed-by-user")) return "";
+  if (code.includes("account-exists-with-different-credential")) return "Tenhle e-mail už je zaregistrovaný jinou metodou (zkus přihlásit e-mailem/heslem).";
+  return "Něco se nepovedlo, zkus to znovu.";
+}
+document.getElementById("authLoginBtn").addEventListener("click", async () => {
+  const email = document.getElementById("authEmail").value.trim();
+  const pass = document.getElementById("authPassword").value;
+  const err = document.getElementById("authErr");
+  err.textContent = "";
+  try { await fbauth.signInWithEmailAndPassword(email, pass); }
+  catch (e) { err.textContent = translateAuthError(e); }
+});
+document.getElementById("authRegisterBtn").addEventListener("click", async () => {
+  const email = document.getElementById("authEmail").value.trim();
+  const pass = document.getElementById("authPassword").value;
+  const err = document.getElementById("authErr");
+  err.textContent = "";
+  try { await fbauth.createUserWithEmailAndPassword(email, pass); }
+  catch (e) { err.textContent = translateAuthError(e); }
+});
+document.getElementById("authLogoutBtn").addEventListener("click", () => fbauth.signOut());
+document.getElementById("authGoogleBtn").addEventListener("click", async () => {
+  const err = document.getElementById("authErr");
+  err.textContent = "";
+  try { await fbauth.signInWithPopup(new firebase.auth.GoogleAuthProvider()); }
+  catch (e) { err.textContent = translateAuthError(e); }
+});
+fbauth.onAuthStateChanged(async (user) => {
+  currentUser = user;
+  updateAuthUI();
+  if (user) {
+    try {
+      const snap = await fbdb.ref("users/" + user.uid + "/profile").get();
+      if (!snap.exists()) {
+        const localRaw = localStorage.getItem("profile:me");
+        if (localRaw) await fbdb.ref("users/" + user.uid + "/profile").set(JSON.parse(localRaw));
+      }
+    } catch (e) { /* ignorováno */ }
+  }
+  loadHomeProfile();
+});
 function updateStreak(profile) {
   const today = todayStr();
   if (profile.lastActiveDate === today) return;
