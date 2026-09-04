@@ -210,9 +210,13 @@
   .podium-col { text-align: center; }
   .podium-medal {
     position: relative; border-radius: 50%; display: flex; align-items: center; justify-content: center;
-    margin: 0 auto 6px; background: #1c2030; overflow: hidden;
+    margin: 0 auto 6px; background: #1c2030;
   }
-  .podium-medal img { width: 100%; height: 100%; object-fit: cover; }
+  .podium-avatar-inner {
+    width: 100%; height: 100%; border-radius: 50%; overflow: hidden;
+    display: flex; align-items: center; justify-content: center;
+  }
+  .podium-avatar-inner img { width: 100%; height: 100%; object-fit: cover; }
   .medal-badge {
     position: absolute; right: -2px; bottom: -2px; background: #0e1017; border-radius: 50%;
     width: 18px; height: 18px; display: flex; align-items: center; justify-content: center; font-size: 11px;
@@ -1097,7 +1101,7 @@ async function loadHomeLeaderboard() {
     const podiumHtml = '<div class="podium-row">' + order.map(i => {
       const p = top3[i];
       return '<div class="podium-col ' + cls[i] + '">'
-        + '<div class="podium-medal">' + avatarInner(p) + '<span class="medal-badge">' + medal[i] + '</span></div>'
+        + '<div class="podium-medal"><div class="podium-avatar-inner">' + avatarInner(p) + '</div><span class="medal-badge">' + medal[i] + '</span></div>'
         + '<div class="podium-bar"></div>'
         + '<p class="podium-name">' + p.name + '</p>'
         + '<p class="podium-score">' + p.cpm + ' zn/min</p>'
