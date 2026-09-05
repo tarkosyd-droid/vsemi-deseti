@@ -1878,6 +1878,8 @@ async function renderBeginnerList() {
       card.title = "Nejdřív dokonči krok " + (stageNum - 1);
     }
     if (isCurrent) {
+      card.style.cursor = "pointer";
+      card.addEventListener("click", () => startSolo(stage, stage.texts[levelsDone], levelsDone + 1));
       card.querySelectorAll(".level-dot").forEach(dot => {
         const lv = parseInt(dot.dataset.lv, 10);
         if (levelsDone >= lv) dot.addEventListener("click", (e) => { e.stopPropagation(); startSolo(stage, stage.texts[lv], lv + 1); });
