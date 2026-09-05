@@ -518,7 +518,7 @@
 
   <div id="screen-solo" class="card" style="display:none;">
     <span class="backlink" data-back="lessons">← zpět na lekce</span>
-    <div class="stat-row">
+    <div class="stat-row" id="soloStatsRow">
       <div class="stat"><div class="num" id="soloWpm">0</div><div class="lbl">znaků/min</div></div>
       <div class="stat"><div class="num" id="soloAcc">100%</div><div class="lbl">přesnost</div></div>
       <div class="stat"><div class="num" id="soloErr">0</div><div class="lbl">chyby</div></div>
@@ -535,11 +535,19 @@
   </div>
 
   <div id="screen-solo-done" class="card" style="display:none;">
-    <p style="font-family:'Space Grotesk',sans-serif; font-weight:700; font-size:19px; margin:0 0 10px;">Lekce dokončena</p>
-    <div class="stat-row">
-      <div class="stat"><div class="num" id="doneWpm">0</div><div class="lbl">znaků/min</div></div>
-      <div class="stat"><div class="num" id="doneAcc">100%</div><div class="lbl">přesnost</div></div>
-      <div class="stat"><div class="num" id="doneErr">0</div><div class="lbl">chyby</div></div>
+    <div id="doneNormalBlock">
+      <p style="font-family:'Space Grotesk',sans-serif; font-weight:700; font-size:19px; margin:0 0 10px;">Lekce dokončena</p>
+      <div class="stat-row">
+        <div class="stat"><div class="num" id="doneWpm">0</div><div class="lbl">znaků/min</div></div>
+        <div class="stat"><div class="num" id="doneAcc">100%</div><div class="lbl">přesnost</div></div>
+        <div class="stat"><div class="num" id="doneErr">0</div><div class="lbl">chyby</div></div>
+      </div>
+    </div>
+    <div id="doneBeginnerBlock" style="display:none; text-align:center;">
+      <div style="font-size:44px; margin-bottom:8px;">🎉</div>
+      <p style="font-family:'Space Grotesk',sans-serif; font-weight:700; font-size:20px; margin:0 0 6px;" id="doneBeginnerTitle">Level up!</p>
+      <p class="hint" id="doneBeginnerSub" style="margin:0 0 18px;"></p>
+      <button class="btn-primary" id="continueBeginnerBtn" style="margin-bottom:10px;">Pokračovat na další krok →</button>
     </div>
     <button class="btn-primary" id="againSoloBtn">Zopakovat lekci</button>
     <button class="btn-secondary" id="backLessonsBtn">Zpět na lekce</button>
@@ -1439,6 +1447,8 @@ let soloEngine = null;
 function startSolo(lesson, text) {
   const activeText = text || pickLessonText(lesson);
   show("solo");
+  const isBegLesson = lesson.id && lesson.id.indexOf("beg") === 0;
+  document.getElementById("soloStatsRow").style.display = isBegLesson ? "none" : "";
   const textEl = document.getElementById("soloText");
   const outerEl = document.getElementById("soloTextOuter");
   const kbEl = document.getElementById("soloKeyboard");
@@ -1446,7 +1456,7 @@ function startSolo(lesson, text) {
   document.getElementById("soloWpm").textContent = "0";
   document.getElementById("soloAcc").textContent = "100%";
   document.getElementById("soloErr").textContent = "0";
-  document.getElementById("soloHint").textContent = "Klikni sem a začni psát — časomíra startuje prvním úhozem.";
+  document.getElementById("soloHint").textContent = isBegLesson ? "Klikni sem a začni psát. Nespěchej, jde jen o to trefit správné klávesy." : "Klikni sem a začni psát — časomíra startuje prvním úhozem.";
   soloEngine = makeTypingEngine({
     text: activeText, textEl, outerEl, keyboardEl: kbEl,
     onRender: (state) => {
@@ -1469,7 +1479,7 @@ function startSolo(lesson, text) {
       document.getElementById("againSoloBtn").textContent = "Jiná věta";
       const cpmDone = computeCpm(state.correctKeys, elapsed);
       const accDone = computeAcc(state.correctKeys, state.totalKeys);
-      const isBeg = lesson.id && lesson.id.indexOf("beg") === 0;
+      const isBeg = isBegLesson;
       const qualifiesForBoard = lesson.id === "long" || lesson.id === "free";
       if (qualifiesForBoard) submitToLeaderboard((cachedProfile && cachedProfile.nickname) || playerName || "Anonym", cpmDone, accDone);
       recordResult({
@@ -1478,6 +1488,25 @@ function startSolo(lesson, text) {
         xpScale: isBeg ? 0.25 : 1,
         beginnerStage: isBeg ? parseInt(lesson.id.replace("beg", ""), 10) : undefined
       });
+      document.getElementById("doneNormalBlock").style.display = isBeg ? "none" : "";
+      document.getElementById("doneBeginnerBlock").style.display = isBeg ? "" : "none";
+      document.getElementById("againSoloBtn").style.display = isBeg ? "none" : "";
+      document.getElementById("backLessonsBtn").style.display = isBeg ? "none" : "";
+      if (isBeg) {
+        const stageNum = parseInt(lesson.id.replace("beg", ""), 10);
+        const nextStage = BEGINNER_STAGES[stageNum];
+        if (nextStage) {
+          document.getElementById("doneBeginnerTitle").textContent = "Level " + (stageNum + 1) + " odemčen!";
+          document.getElementById("doneBeginnerSub").textContent = "Zvládl/a jsi " + lesson.name + ". Další na řadě: " + nextStage.name;
+          document.getElementById("continueBeginnerBtn").textContent = "Pokračovat na další krok →";
+          document.getElementById("continueBeginnerBtn").onclick = () => startSolo(nextStage, nextStage.texts[0]);
+        } else {
+          document.getElementById("doneBeginnerTitle").textContent = "Celá abeceda zvládnuta! 🏆";
+          document.getElementById("doneBeginnerSub").textContent = "Teď už můžeš pokračovat v normálním Nácviku se všemi lekcemi.";
+          document.getElementById("continueBeginnerBtn").textContent = "Zpět na Nácvik";
+          document.getElementById("continueBeginnerBtn").onclick = () => { renderLessonList(); show("lessons"); };
+        }
+      }
       setTimeout(() => show("solo-done"), 650);
     }
   });
