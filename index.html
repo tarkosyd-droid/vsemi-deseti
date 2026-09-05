@@ -126,6 +126,8 @@
     padding: 13px 16px; cursor: pointer; transition: border-color 0.15s, transform 0.1s;
   }
   .lesson-row:hover { border-color: var(--accent); transform: translateX(2px); }
+  .lesson-row.locked-stage { opacity: 0.45; cursor: default; }
+  .lesson-row.locked-stage:hover { border-color: var(--line); transform: none; }
   .lesson-row .name { font-size: 14px; font-weight: 600; }
   .lesson-row .best { font-size: 12px; color: var(--tx2); }
   .stat-row { display: flex; gap: 10px; margin-bottom: 18px; }
@@ -227,6 +229,10 @@
   .goprofile-top { display: flex; align-items: center; gap: 14px; margin-bottom: 16px; }
   .goprofile-level-wrap { flex: 1; }
   .goprofile-level-row { display: flex; justify-content: space-between; font-size: 14px; font-weight: 700; margin-bottom: 6px; }
+  .beginner-card { text-align: center; }
+  .beginner-card .t { font-family: 'Space Grotesk', sans-serif; font-weight: 700; font-size: 15px; margin-bottom: 6px; }
+  .beginner-card .d { font-size: 12.5px; color: var(--tx2); line-height: 1.5; }
+  .beginner-card:hover { border-color: var(--accent); }
   .home-grid { display: flex; flex-direction: column; gap: 12px; }
   .leaderboard-card { padding: 22px; }
   .lb-title { font-family: 'Space Grotesk', sans-serif; font-weight: 700; font-size: 16px; margin: 0 0 14px; }
@@ -385,9 +391,9 @@
         </div>
         <p class="feature-strip-label">Co appka umí</p>
         <div class="feature-strip">
-          <div class="feature-chip"><span class="fi">⌨️</span>Barevná klávesnice podle prstů</div>
-          <div class="feature-chip"><span class="fi">📊</span>Živé znaky za minutu a přesnost</div>
-          <div class="feature-chip"><span class="fi">🏆</span>Odveta a stupně vítězů v závodě</div>
+          <div class="feature-chip"><span class="fi">🎨</span>Vizualizace prstů</div>
+          <div class="feature-chip"><span class="fi">⚡</span>Rychlost &amp; přesnost</div>
+          <div class="feature-chip"><span class="fi">🏎️</span>Multiplayer závody</div>
         </div>
       </div>
       <div class="card leaderboard-card">
@@ -413,6 +419,11 @@
           <div class="stat"><div class="num" id="homeStatAcc">0%</div><div class="lbl">Ø přesnost</div></div>
         </div>
         <button class="btn-primary" id="goProfileBtn" style="margin-bottom:0;">Upravit profil →</button>
+      </div>
+      <div class="card beginner-card" id="goBeginner">
+        <div class="ic" style="margin-bottom:8px;">🐣</div>
+        <div class="t">Začínám od nuly</div>
+        <div class="d">Nikdy jsi nepsal/a všemi deseti? Tady se to naučíš úplně od začátku, prst po prstu, písmenko po písmenku.</div>
       </div>
     </div>
   </div>
@@ -477,6 +488,12 @@
   <div id="screen-lessons" class="card" style="display:none;">
     <span class="backlink" data-back="home">← zpět</span>
     <div class="lesson-list" id="lessonList"></div>
+  </div>
+
+  <div id="screen-beginner" class="card" style="display:none;">
+    <span class="backlink" data-back="home">← zpět</span>
+    <p class="hint" style="margin:0 0 14px;">Postupuj krok za krokem — každý další krok se odemkne, až dokončíš ten předchozí.</p>
+    <div class="lesson-list" id="beginnerList"></div>
   </div>
 
   <div id="screen-solo" class="card" style="display:none;">
@@ -604,6 +621,22 @@ function flashKey(el, ch, ok) {
 }
 
 /* ---------- lessons (real words, no diacritics) ---------- */
+const BEGINNER_STAGES = [
+  { id: "beg1", name: "Krok 1: f, j", hint: "Ukazováček levé ruky na F, ukazováček pravé ruky na J. Tam se prsty vždy vrací.", texts: ["fff jjj fjfj jfjf ff jj fj jf fff jjj"] },
+  { id: "beg2", name: "Krok 2: d, k", hint: "Prostředníček levé ruky na D, prostředníček pravé ruky na K.", texts: ["ddd kkk dkdk kdkd dd kk dk kd fdjk kdjf"] },
+  { id: "beg3", name: "Krok 3: s, l", hint: "Prsteníček levé ruky na S, prsteníček pravé ruky na L.", texts: ["sss lll slsl lsls ss ll sl ls dls sld fjdk"] },
+  { id: "beg4", name: "Krok 4: a", hint: "Malíček levé ruky na A. Teď už umíš svoje první slovo!", texts: ["aaa fja fdsa jkl sad dal jak lak sklad kladla skladal"] },
+  { id: "beg5", name: "Krok 5: g, h", hint: "Ukazováček levé ruky natáhni na G, ukazováček pravé ruky na H.", texts: ["ggg hhh gh hg had hlas hala sad dal jak lak sklad"] },
+  { id: "beg6", name: "Krok 6: e, i", hint: "Prostředníček levé ruky nahoru na E, prostředníček pravé ruky nahoru na I.", texts: ["eee iii ei ie les dej jde sedla had hlas hala sad dal"] },
+  { id: "beg7", name: "Krok 7: r, u", hint: "Ukazováček levé ruky na R, ukazováček pravé ruky na U.", texts: ["rrr uuu ru ur dar kraj sud les dej jde sedla had hlas"] },
+  { id: "beg8", name: "Krok 8: w, o", hint: "Prsteníček levé ruky na W, prsteníček pravé ruky na O.", texts: ["www ooo wo ow kolo sokol dar kraj sud les dej jde sedla"] },
+  { id: "beg9", name: "Krok 9: q, p", hint: "Malíček levé ruky na Q, malíček pravé ruky na P.", texts: ["qqq ppp qp pq pes pole spor kolo sokol dar kraj sud les"] },
+  { id: "beg10", name: "Krok 10: t, y", hint: "Ukazováček levé ruky na T, ukazováček pravé ruky na Y.", texts: ["ttt yyy ty yt auto dort star jistota pes pole spor kolo"] },
+  { id: "beg11", name: "Krok 11: z, m", hint: "Malíček levé ruky dolů na Z, ukazováček pravé ruky dolů na M.", texts: ["zzz mmm zm mz zima moje zase auto dort star jistota pes"] },
+  { id: "beg12", name: "Krok 12: x, n", hint: "Prsteníček levé ruky dolů na X, ukazováček pravé ruky dolů na N.", texts: ["xxx nnn xn nx nos noha kmen zima moje zase auto dort star"] },
+  { id: "beg13", name: "Krok 13: c, v", hint: "Prostředníček levé ruky dolů na C, ukazováček levé ruky dolů na V.", texts: ["ccc vvv cv vc voda cena dva nos noha kmen zima moje zase"] },
+  { id: "beg14", name: "Krok 14: b — hotovo!", hint: "Ukazováček levé ruky dolů na B. Teď znáš úplně celou abecedu!", texts: ["bbb byt bota obal voda cena dva nos noha kmen zima moje"] },
+];
 const LESSONS = [
   { id: "home", name: "Základní řádek", texts: [
     "asdf jklö sad dal had jak lak hlas hala sklad kladla skladal hlas sklad",
@@ -1042,17 +1075,18 @@ function showLevelUp(level) {
   overlay.addEventListener("click", () => overlay.remove());
   setTimeout(() => overlay.remove(), 2600);
 }
-async function recordResult({ cpm, acc, lessonId, isRace, won, textLength, timeMs }) {
+async function recordResult({ cpm, acc, lessonId, isRace, won, textLength, timeMs, xpScale, beginnerStage }) {
   const profile = await loadProfile();
   const oldLevel = getLevelInfo(profile.xp || 0).level;
   const lengthBonus = Math.round((textLength || 0) / 10);
-  const gained = Math.round((cpm || 0) / 2) + (acc === 100 ? 20 : 0) + lengthBonus + 10;
+  const gained = Math.round(((Math.round((cpm || 0) / 2) + (acc === 100 ? 20 : 0) + lengthBonus + 10)) * (xpScale || 1));
   profile.xp = (profile.xp || 0) + gained;
   profile.lessonsCompleted = (profile.lessonsCompleted || 0) + 1;
   profile.totalChars = (profile.totalChars || 0) + (textLength || 0);
   profile.sumCpm = (profile.sumCpm || 0) + (cpm || 0);
   profile.sumAcc = (profile.sumAcc || 0) + (acc || 0);
   profile.totalTimeMs = (profile.totalTimeMs || 0) + (timeMs || 0);
+  if (beginnerStage && (profile.beginnerProgress || 0) < beginnerStage) profile.beginnerProgress = beginnerStage;
   if (acc === 100) profile.perfectCount = (profile.perfectCount || 0) + 1;
   if (!isRace) {
     profile.lessonIdsSeen = profile.lessonIdsSeen || [];
@@ -1327,17 +1361,37 @@ document.getElementById("tabWeek").addEventListener("click", () => {
 
 /* ---------- screen management ---------- */
 function show(id) {
-  ["home","lessons","solo","solo-done","race-home","lobby","countdown","race","results","profile"].forEach(s => {
+  ["home","lessons","beginner","solo","solo-done","race-home","lobby","countdown","race","results","profile"].forEach(s => {
     document.getElementById("screen-" + s).style.display = (s === id) ? "" : "none";
   });
   if (id === "home") { loadHomeLeaderboard(); updateGoProfilePreview(); }
   if (id === "profile") loadHomeProfile();
+  if (id === "beginner") renderBeginnerList();
 }
 document.getElementById("goProfile").addEventListener("click", () => show("profile"));
+document.getElementById("goBeginner").addEventListener("click", () => show("beginner"));
 document.querySelectorAll("[data-back]").forEach(el => { el.addEventListener("click", () => show(el.dataset.back)); });
 
 /* ---------- solo practice ---------- */
 document.getElementById("goPractice").addEventListener("click", () => { renderLessonList(); show("lessons"); });
+let beginnerProgressCache = 0;
+async function renderBeginnerList() {
+  const el = document.getElementById("beginnerList");
+  const profile = await loadProfile();
+  beginnerProgressCache = profile.beginnerProgress || 0;
+  el.innerHTML = "";
+  BEGINNER_STAGES.forEach((stage, i) => {
+    const stageNum = i + 1;
+    const done = stageNum <= beginnerProgressCache;
+    const unlocked = stageNum <= beginnerProgressCache + 1;
+    const row = document.createElement("div");
+    row.className = "lesson-row" + (unlocked ? "" : " locked-stage");
+    const status = done ? "✅ hotovo" : (unlocked ? "→ další na řadě" : "🔒 nejdřív dokonči krok " + (stageNum - 1));
+    row.innerHTML = '<span class="name">' + stage.name + '</span><span class="best">' + status + '</span>';
+    if (unlocked) row.addEventListener("click", () => startSolo(stage, stage.texts[0]));
+    el.appendChild(row);
+  });
+}
 function renderLessonList() {
   const el = document.getElementById("lessonList");
   el.innerHTML = "";
@@ -1386,9 +1440,15 @@ function startSolo(lesson, text) {
       document.getElementById("againSoloBtn").textContent = "Jiná věta";
       const cpmDone = computeCpm(state.correctKeys, elapsed);
       const accDone = computeAcc(state.correctKeys, state.totalKeys);
+      const isBeg = lesson.id && lesson.id.indexOf("beg") === 0;
       const qualifiesForBoard = lesson.id === "long" || lesson.id === "free";
       if (qualifiesForBoard) submitToLeaderboard((cachedProfile && cachedProfile.nickname) || playerName || "Anonym", cpmDone, accDone);
-      recordResult({ cpm: cpmDone, acc: accDone, lessonId: lesson.id, isRace: false, won: false, textLength: state.text.length, timeMs: elapsed });
+      recordResult({
+        cpm: cpmDone, acc: accDone, lessonId: lesson.id, isRace: false, won: false,
+        textLength: state.text.length, timeMs: elapsed,
+        xpScale: isBeg ? 0.25 : 1,
+        beginnerStage: isBeg ? parseInt(lesson.id.replace("beg", ""), 10) : undefined
+      });
       setTimeout(() => show("solo-done"), 650);
     }
   });
@@ -1406,7 +1466,11 @@ function soloKeyHandler(e) {
   }
 }
 document.getElementById("againSoloBtn").addEventListener("click", () => startSolo(window._lastLesson));
-document.getElementById("backLessonsBtn").addEventListener("click", () => { renderLessonList(); show("lessons"); });
+document.getElementById("backLessonsBtn").addEventListener("click", () => {
+  const l = window._lastLesson;
+  if (l && l.id && l.id.indexOf("beg") === 0) { show("beginner"); }
+  else { renderLessonList(); show("lessons"); }
+});
 
 /* ---------- race mode (lobby via shared storage) ---------- */
 function uid() { return "p" + Math.random().toString(36).slice(2, 10); }
