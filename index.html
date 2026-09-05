@@ -1756,6 +1756,7 @@ document.getElementById("joinClassBtn").addEventListener("click", async () => {
     showToast("Přidáno do třídy „" + className + "“");
     renderProfile(profile);
   } catch (e) {
+    console.error("Chyba při přidávání do třídy:", e);
     errEl.textContent = "Nepodařilo se přidat do třídy, zkus to prosím znovu.";
     errEl.style.display = "";
   }
