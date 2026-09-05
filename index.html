@@ -12,6 +12,7 @@
 <script src="https://cdnjs.cloudflare.com/ajax/libs/firebase/10.13.2/firebase-database-compat.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/firebase/10.13.2/firebase-auth-compat.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/firebase/10.13.2/firebase-app-check-compat.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
 <script>
   const firebaseConfig = {
     apiKey: "AIzaSyDYMFmP5A-PP76xrXNtcXOrVdptEzb5154",
@@ -282,6 +283,10 @@
   }
   .friends-search-btn:hover { filter: brightness(1.08); }
   .friends-grid { display: flex; flex-direction: column; gap: 8px; margin-top: 12px; }
+  .roster-table { width: 100%; border-collapse: collapse; font-size: 13px; }
+  .roster-table th { text-align: left; color: var(--tx2); font-weight: 600; padding: 8px 10px; border-bottom: 1px solid var(--line); }
+  .roster-table td { padding: 8px 10px; border-bottom: 1px solid var(--line); }
+  .roster-table tr:hover td { background: rgba(111,140,255,0.06); }
   .friend-card {
     display: flex; align-items: center; gap: 12px; background: #12151f; border: 1px solid var(--line);
     border-radius: 12px; padding: 10px 12px;
@@ -636,8 +641,31 @@
         <div class="friends-grid" id="friendsList"></div>
         <p class="lb-title" style="margin-top:20px;"><svg width="18" height="18" viewBox="0 0 24 24" style="vertical-align:-2px;"><rect x="3" y="5" width="18" height="16" rx="2" fill="none" stroke="currentColor" stroke-width="2"/><line x1="3" y1="9.5" x2="21" y2="9.5" stroke="currentColor" stroke-width="2"/><line x1="7" y1="2" x2="7" y2="6.5" stroke="currentColor" stroke-width="2"/><line x1="17" y1="2" x2="17" y2="6.5" stroke="currentColor" stroke-width="2"/></svg> Denní úkoly</p>
         <div class="quest-list" id="questList"></div>
+        <p class="lb-title" style="margin-top:20px;"><svg width="18" height="18" viewBox="0 0 24 24" style="vertical-align:-2px;"><path d="M12 3l9 5-9 5-9-5 9-5z" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/><path d="M5 10.5v4c0 1.5 3 3.5 7 3.5s7-2 7-3.5v-4" fill="none" stroke="currentColor" stroke-width="2"/></svg> Škola / Firma</p>
+        <p class="hint" style="margin:-6px 0 10px;">Založ třídu pro svoje žáky, nebo se přidej do třídy pomocí kódu od učitele.</p>
+        <div id="joinClassBox">
+          <div class="friends-search">
+            <input type="text" id="classCodeInput" placeholder="Kód třídy od učitele…" class="friends-search-input">
+            <button class="friends-search-btn" id="joinClassBtn">Přidat se</button>
+          </div>
+          <p class="hint" id="joinClassErr" style="display:none; color:#ff6b6b; margin:8px 0 0;"></p>
+        </div>
+        <div id="myClassBox" style="display:none;"></div>
+        <button class="btn-secondary" id="createClassBtn" style="margin-top:10px;">Založit novou třídu</button>
+        <div id="ownedClassesList"></div>
     </div>
     <button class="btn-danger" id="authLogoutBtn" style="display:none;">Odhlásit se</button>
+  </div>
+
+  <div id="screen-class-detail" class="card" style="display:none;">
+    <span class="backlink" data-back="profile">← zpět na profil</span>
+    <p class="lb-title" id="classDetailTitle" style="margin-top:14px;">Třída</p>
+    <p class="hint" id="classDetailCode"></p>
+    <div style="display:flex; gap:8px; margin:12px 0;">
+      <button class="btn-secondary" id="exportCsvBtn" style="margin-bottom:0;">Export CSV</button>
+      <button class="btn-secondary" id="exportPdfBtn" style="margin-bottom:0;">Export PDF</button>
+    </div>
+    <div id="classRosterTable"></div>
   </div>
 
   <div id="screen-lessons" class="card" style="display:none;">
@@ -1209,6 +1237,7 @@ function renderProfile(profile) {
   }
   renderQuests(ensureDailyQuests(profile));
   renderFriendsList(profile);
+  renderClassSection(profile);
 }
 async function loadHomeProfile() {
   const profile = await loadProfile();
@@ -1235,6 +1264,30 @@ function askNickname() {
       resolve(val);
     }
     overlay.querySelector("#nicknamePromptSave").addEventListener("click", submit);
+    input.addEventListener("keydown", e => { if (e.key === "Enter") submit(); });
+  });
+}
+function askText(icon, title, sub, placeholder) {
+  return new Promise((resolve) => {
+    const overlay = document.createElement("div");
+    overlay.className = "levelup-overlay";
+    overlay.innerHTML = '<div class="levelup-card" style="cursor:default;">'
+      + '<div class="lu-icon">' + icon + '</div>'
+      + '<p class="lu-title">' + title + '</p>'
+      + '<p class="lu-sub" style="margin-bottom:14px;">' + sub + '</p>'
+      + '<input type="text" id="textPromptInput" placeholder="' + placeholder + '" maxlength="40" style="text-align:center; margin-bottom:12px;">'
+      + '<button class="btn-primary" id="textPromptSave" style="margin-bottom:0;">Uložit</button>'
+      + '</div>';
+    document.body.appendChild(overlay);
+    const input = overlay.querySelector("#textPromptInput");
+    input.focus();
+    function submit() {
+      const val = input.value.trim();
+      if (!val) { input.focus(); return; }
+      overlay.remove();
+      resolve(val);
+    }
+    overlay.querySelector("#textPromptSave").addEventListener("click", submit);
     input.addEventListener("keydown", e => { if (e.key === "Enter") submit(); });
   });
 }
@@ -1316,6 +1369,16 @@ async function recordResult({ cpm, acc, lessonId, isRace, won, textLength, timeM
   });
   await saveProfile(profile);
   renderProfile(profile);
+  if (profile.classId && currentUser) {
+    const lc = profile.lessonsCompleted || 0;
+    fbdb.ref("classes/" + profile.classId + "/members/" + currentUser.uid).update({
+      name: profile.nickname || "Žák",
+      cpm: lc ? Math.round((profile.sumCpm || 0) / lc) : 0,
+      acc: lc ? Math.round((profile.sumAcc || 0) / lc) : 0,
+      lessonsCompleted: lc,
+      xp: profile.xp || 0
+    }).catch(() => {});
+  }
   const newLevel = getLevelInfo(profile.xp).level;
   if (newLevel > oldLevel) {
     setTimeout(() => showLevelUp(newLevel), 300);
@@ -1591,6 +1654,178 @@ document.getElementById("addFriendBtn").addEventListener("click", async () => {
     errEl.style.display = "";
   }
 });
+function randomClassCode() {
+  const chars = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
+  let code = "";
+  for (let i = 0; i < 6; i++) code += chars[Math.floor(Math.random() * chars.length)];
+  return code;
+}
+async function renderClassSection(profile) {
+  const joinBox = document.getElementById("joinClassBox");
+  const myClassBox = document.getElementById("myClassBox");
+  const ownedListEl = document.getElementById("ownedClassesList");
+  if (!joinBox || !ownedListEl) return;
+  if (!currentUser) {
+    joinBox.style.display = "none";
+    myClassBox.style.display = "none";
+    ownedListEl.innerHTML = "";
+    document.getElementById("createClassBtn").style.display = "none";
+    return;
+  }
+  document.getElementById("createClassBtn").style.display = "";
+  if (profile.classId) {
+    joinBox.style.display = "none";
+    myClassBox.style.display = "";
+    myClassBox.innerHTML = "Jsi ve třídě: <strong>" + (profile.className || profile.classId) + "</strong> &nbsp; <button class=\"btn-secondary\" id=\"leaveClassBtn\" style=\"margin:8px 0 0; padding:6px 12px; font-size:12.5px;\">Opustit třídu</button>";
+    document.getElementById("leaveClassBtn").addEventListener("click", async () => {
+      const ok = await showConfirm("Opustit třídu?", "Učitel tě přestane vidět v přehledu výsledků.");
+      if (!ok) return;
+      try { await fbdb.ref("classes/" + profile.classId + "/members/" + currentUser.uid).remove(); } catch (e) {}
+      delete profile.classId;
+      delete profile.className;
+      await saveProfile(profile);
+      renderProfile(profile);
+    });
+  } else {
+    joinBox.style.display = "";
+    myClassBox.style.display = "none";
+  }
+  ownedListEl.innerHTML = "";
+  const owned = profile.ownedClasses || {};
+  Object.keys(owned).forEach(classId => {
+    const row = document.createElement("div");
+    row.className = "lesson-row";
+    row.innerHTML = '<span class="name">' + owned[classId] + '</span><span class="best">Spravovat →</span>';
+    row.addEventListener("click", () => openClassDetail(classId, owned[classId]));
+    ownedListEl.appendChild(row);
+  });
+}
+document.getElementById("createClassBtn").addEventListener("click", async () => {
+  if (!currentUser) return;
+  const name = await askText("🏫", "Jak se bude třída jmenovat?", "Uvidí to jen ty, žáci vidí jen kód.", "Např. 8.B – informatika");
+  if (!name) return;
+  const classId = fbdb.ref("classes").push().key;
+  const code = randomClassCode();
+  try {
+    await fbdb.ref("classes/" + classId).set({
+      name, ownerUid: currentUser.uid, createdAt: Date.now(), inviteCode: code, members: {}
+    });
+    await fbdb.ref("classInvites/" + code).set({ classId });
+    const profile = await loadProfile();
+    profile.ownedClasses = profile.ownedClasses || {};
+    profile.ownedClasses[classId] = name;
+    await saveProfile(profile);
+    renderProfile(profile);
+    showToast("Třída „" + name + "“ založena — kód: " + code);
+  } catch (e) {
+    showToast("Třídu se nepodařilo založit, zkus to znovu.");
+  }
+});
+document.getElementById("joinClassBtn").addEventListener("click", async () => {
+  const input = document.getElementById("classCodeInput");
+  const errEl = document.getElementById("joinClassErr");
+  const code = input.value.trim().toUpperCase();
+  errEl.style.display = "none";
+  if (!currentUser) {
+    errEl.textContent = "Pro přidání se do třídy se musíš přihlásit (výše, Účet).";
+    errEl.style.display = "";
+    return;
+  }
+  if (!code) return;
+  try {
+    const snap = await fbdb.ref("classInvites/" + code).get();
+    if (!snap.exists()) {
+      errEl.textContent = "Tenhle kód neexistuje. Zkontroluj, jestli ho máš správně opsaný.";
+      errEl.style.display = "";
+      return;
+    }
+    const classId = snap.val().classId;
+    const classSnap = await fbdb.ref("classes/" + classId + "/name").get();
+    const className = classSnap.exists() ? classSnap.val() : "Třída";
+    const profile = await loadProfile();
+    await fbdb.ref("classes/" + classId + "/members/" + currentUser.uid).set({
+      name: profile.nickname || "Žák", cpm: 0, acc: 0, lessonsCompleted: 0, xp: profile.xp || 0, joinedAt: Date.now()
+    });
+    profile.classId = classId;
+    profile.className = className;
+    await saveProfile(profile);
+    input.value = "";
+    showToast("Přidáno do třídy „" + className + "“");
+    renderProfile(profile);
+  } catch (e) {
+    errEl.textContent = "Nepodařilo se přidat do třídy, zkus to prosím znovu.";
+    errEl.style.display = "";
+  }
+});
+let currentClassDetailId = null;
+async function openClassDetail(classId, className) {
+  currentClassDetailId = classId;
+  document.getElementById("classDetailTitle").textContent = className;
+  document.getElementById("classDetailCode").textContent = "Načítám…";
+  show("class-detail");
+  try {
+    const snap = await fbdb.ref("classes/" + classId).get();
+    const data = snap.val() || {};
+    document.getElementById("classDetailCode").textContent = "Kód pro žáky: " + (data.inviteCode || "—");
+    const members = data.members || {};
+    const rows = Object.values(members).sort((a, b) => (b.xp || 0) - (a.xp || 0));
+    const tableEl = document.getElementById("classRosterTable");
+    if (!rows.length) {
+      tableEl.innerHTML = '<p class="hint">Zatím se nikdo nepřidal — pošli žákům kód výše.</p>';
+    } else {
+      tableEl.innerHTML = '<table class="roster-table"><thead><tr><th>Jméno</th><th>Ø zn/min</th><th>Ø přesnost</th><th>Lekcí</th><th>XP</th></tr></thead><tbody>' +
+        rows.map(m => '<tr><td>' + (m.name || "—") + '</td><td>' + Math.round(m.cpm || 0) + '</td><td>' + Math.round(m.acc || 0) + '%</td><td>' + (m.lessonsCompleted || 0) + '</td><td>' + (m.xp || 0) + '</td></tr>').join("") +
+        '</tbody></table>';
+    }
+    window._currentClassRows = rows;
+  } catch (e) {
+    document.getElementById("classDetailCode").textContent = "Nepodařilo se načíst data třídy.";
+  }
+}
+document.getElementById("exportCsvBtn").addEventListener("click", () => {
+  const rows = window._currentClassRows || [];
+  let csv = "Jméno;Ø zn/min;Ø přesnost;Lekcí;XP\n";
+  rows.forEach(m => {
+    csv += [m.name || "", Math.round(m.cpm || 0), Math.round(m.acc || 0), m.lessonsCompleted || 0, m.xp || 0].join(";") + "\n";
+  });
+  const blob = new Blob(["\uFEFF" + csv], { type: "text/csv;charset=utf-8;" });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = "trida-vysledky.csv";
+  a.click();
+  URL.revokeObjectURL(url);
+});
+document.getElementById("exportPdfBtn").addEventListener("click", () => {
+  const rows = window._currentClassRows || [];
+  const title = document.getElementById("classDetailTitle").textContent;
+  try {
+    const { jsPDF } = window.jspdf;
+    const doc = new jsPDF();
+    doc.setFontSize(16);
+    doc.text(title, 14, 16);
+    doc.setFontSize(10);
+    let y = 28;
+    doc.text("Jméno", 14, y);
+    doc.text("Zn/min", 90, y);
+    doc.text("Přesnost", 120, y);
+    doc.text("Lekcí", 155, y);
+    doc.text("XP", 180, y);
+    y += 6;
+    rows.forEach(m => {
+      doc.text(String(m.name || ""), 14, y);
+      doc.text(String(Math.round(m.cpm || 0)), 90, y);
+      doc.text(Math.round(m.acc || 0) + "%", 120, y);
+      doc.text(String(m.lessonsCompleted || 0), 155, y);
+      doc.text(String(m.xp || 0), 180, y);
+      y += 7;
+      if (y > 280) { doc.addPage(); y = 20; }
+    });
+    doc.save("trida-vysledky.pdf");
+  } catch (e) {
+    showToast("PDF export se nezdařil, zkus prosím CSV.");
+  }
+});
 function renderQuests(dailyQuests) {
   const el = document.getElementById("questList");
   if (!el) return;
@@ -1794,7 +2029,7 @@ document.getElementById("tabFriends").addEventListener("click", () => {
 /* ---------- screen management ---------- */
 let suppressHistoryPush = false;
 function show(id) {
-  ["home","lessons","beginner","solo","solo-done","race-home","lobby","countdown","race","results","profile"].forEach(s => {
+  ["home","lessons","beginner","solo","solo-done","race-home","lobby","countdown","race","results","profile","class-detail"].forEach(s => {
     document.getElementById("screen-" + s).style.display = (s === id) ? "" : "none";
   });
   const headerEl = document.querySelector(".app-header");
