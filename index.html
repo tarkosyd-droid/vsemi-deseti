@@ -253,12 +253,16 @@
   .goprofile-level-wrap { flex: 1; }
   .goprofile-level-row { display: flex; justify-content: space-between; font-size: 14px; font-weight: 700; margin-bottom: 6px; }
   .beginner-card {
-    text-align: center; border-color: rgba(176,111,255,0.5);
-    box-shadow: 0 0 0 1px rgba(176,111,255,0.25), 0 0 28px -6px rgba(176,111,255,0.45);
+    text-align: center; border-color: rgba(176,111,255,0.6); padding: 34px 26px;
+    box-shadow: 0 0 0 1px rgba(176,111,255,0.35), 0 0 48px -8px rgba(176,111,255,0.65), 0 0 90px -20px rgba(176,111,255,0.5);
   }
-  .beginner-card .ic { display: flex; align-items: center; justify-content: center; }
-  .beginner-card .t { font-family: 'Space Grotesk', sans-serif; font-weight: 700; font-size: 16px; margin-bottom: 6px; }
-  .beginner-card .d { font-size: 12.5px; color: var(--tx2); line-height: 1.5; margin-bottom: 16px; }
+  .beginner-card .ic { display: flex; align-items: center; justify-content: center; margin-bottom: 14px; }
+  .beginner-card .ic svg { width: 40px; height: 40px; }
+  .beginner-card .t { font-family: 'Space Grotesk', sans-serif; font-weight: 700; font-size: 20px; margin-bottom: 8px; }
+  .beginner-card .d { font-size: 13.5px; color: var(--tx2); line-height: 1.6; margin-bottom: 20px; }
+  #goPractice .ic { color: #8ee000; background: rgba(142,224,0,0.14); }
+  #goPractice .t { color: #8ee000; }
+  #goPractice .mode-cta { background: linear-gradient(135deg, #9be000, #4ee08a); color: #08210f; }
   .beginner-card:hover { border-color: var(--accent2); box-shadow: 0 0 0 1px rgba(176,111,255,0.4), 0 0 34px -4px rgba(176,111,255,0.6); }
   .home-grid { display: flex; flex-wrap: wrap; gap: 12px; align-items: flex-start; }
   .home-col { flex: 1 1 300px; min-width: 280px; display: flex; flex-direction: column; gap: 12px; }
