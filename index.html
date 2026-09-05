@@ -201,15 +201,47 @@
   .players { list-style: none; margin: 0 0 10px; padding: 0; }
   .players li { display: flex; justify-content: space-between; padding: 9px 0; border-bottom: 1px solid var(--line); font-size: 14px; }
   .players li:last-child { border-bottom: none; }
-  .friends-add-row { display: flex; gap: 8px; }
-  .friends-add-row .btn-secondary { width: auto; flex-shrink: 0; margin-bottom: 0; padding-left: 18px; padding-right: 18px; }
-  .text-input {
-    flex: 1; background: #12151f; border: 1px solid var(--line); border-radius: 10px;
-    padding: 10px 12px; color: var(--tx); font-size: 13.5px;
+  .friends-search {
+    display: flex; background: #12151f; border: 1px solid var(--line); border-radius: 14px;
+    padding: 4px; transition: border-color 0.15s, box-shadow 0.15s;
   }
-  .text-input:focus { outline: none; border-color: var(--accent); }
-  .friend-remove { color: var(--tx2); cursor: pointer; font-weight: 700; padding: 0 4px; }
+  .friends-search:focus-within { border-color: var(--accent2); box-shadow: 0 0 0 3px rgba(176,111,255,0.15); }
+  .friends-search-input {
+    flex: 1; background: transparent; border: none; color: var(--tx); font-size: 13.5px;
+    padding: 10px 12px;
+  }
+  .friends-search-input:focus { outline: none; }
+  .friends-search-btn {
+    flex-shrink: 0; border: none; border-radius: 10px; padding: 10px 18px; font-weight: 700; font-size: 13px;
+    cursor: pointer; color: #fff; background: linear-gradient(135deg, #b06fff, #4ee08a);
+  }
+  .friends-search-btn:hover { filter: brightness(1.08); }
+  .friends-grid { display: flex; flex-direction: column; gap: 8px; margin-top: 12px; }
+  .friend-card {
+    display: flex; align-items: center; gap: 12px; background: #12151f; border: 1px solid var(--line);
+    border-radius: 12px; padding: 10px 12px;
+  }
+  .friend-card .friend-avatar {
+    width: 38px; height: 38px; border-radius: 50%; overflow: hidden; flex-shrink: 0;
+    background: #1c2030; display: flex; align-items: center; justify-content: center; font-size: 18px; position: relative;
+  }
+  .friend-card .friend-avatar img { width: 100%; height: 100%; object-fit: cover; }
+  .friend-card .friend-dot {
+    position: absolute; right: -1px; bottom: -1px; width: 10px; height: 10px; border-radius: 50%;
+    background: var(--good); border: 2px solid #12151f;
+  }
+  .friend-card .friend-info { flex: 1; min-width: 0; }
+  .friend-card .friend-name { font-weight: 600; font-size: 13.5px; }
+  .friend-card .friend-sub { font-size: 11.5px; color: var(--tx2); margin-top: 2px; }
+  .friend-card .friend-actions { display: flex; align-items: center; gap: 6px; flex-shrink: 0; }
+  .friend-action-btn {
+    width: 32px; height: 32px; border-radius: 9px; border: 1px solid var(--line); background: #1c2030;
+    color: var(--accent); display: flex; align-items: center; justify-content: center; cursor: pointer;
+  }
+  .friend-action-btn:hover { border-color: var(--accent); }
+  .friend-remove { color: var(--tx2); cursor: pointer; font-weight: 700; padding: 4px 6px; }
   .friend-remove:hover { color: #ff6b6b; }
+  .friends-empty { font-size: 13px; color: var(--tx2); padding: 8px 2px; }
   .tag { font-size: 11px; color: var(--tx2); background: #1c2030; padding: 3px 9px; border-radius: 20px; margin-right: 6px; }
   .backlink {
     display: inline-flex; align-items: center; gap: 6px; margin-bottom: 16px;
@@ -519,12 +551,12 @@
         <p class="lb-title" style="margin-top:4px;">🏅 Odznaky</p>
         <div class="badge-grid" id="badgeGrid"></div>
         <p class="lb-title" style="margin-top:20px;">👥 Přátelé</p>
-        <div class="friends-add-row">
-          <input type="text" id="friendNameInput" placeholder="Jméno hráče ze žebříčku" class="text-input">
-          <button class="btn-secondary" id="addFriendBtn" style="margin-bottom:0;">Přidat</button>
+        <div class="friends-search">
+          <input type="text" id="friendNameInput" placeholder="Jméno hráče ze žebříčku…" class="friends-search-input">
+          <button class="friends-search-btn" id="addFriendBtn">Přidat</button>
         </div>
-        <p class="hint" id="friendErr" style="display:none; color:#ff6b6b; margin:6px 0 0;"></p>
-        <ul class="players" id="friendsList" style="margin-top:10px;"></ul>
+        <p class="hint" id="friendErr" style="display:none; color:#ff6b6b; margin:8px 0 0;"></p>
+        <div class="friends-grid" id="friendsList"></div>
         <p class="lb-title" style="margin-top:20px;"><svg width="18" height="18" viewBox="0 0 24 24" style="vertical-align:-2px;"><rect x="3" y="5" width="18" height="16" rx="2" fill="none" stroke="currentColor" stroke-width="2"/><line x1="3" y1="9.5" x2="21" y2="9.5" stroke="currentColor" stroke-width="2"/><line x1="7" y1="2" x2="7" y2="6.5" stroke="currentColor" stroke-width="2"/><line x1="17" y1="2" x2="17" y2="6.5" stroke="currentColor" stroke-width="2"/></svg> Denní úkoly</p>
         <div class="quest-list" id="questList"></div>
     </div>
@@ -1302,18 +1334,36 @@ function updateDailyQuests(profile, ctx) {
   });
   return { bonus, completed };
 }
-function renderFriendsList(profile) {
+async function renderFriendsList(profile) {
   const el = document.getElementById("friendsList");
   if (!el) return;
   const friends = profile.friends || {};
   const keys = Object.keys(friends);
   if (!keys.length) {
-    el.innerHTML = '<li style="border-bottom:none; color:var(--tx2); font-size:13px;">Zatím žádní přátelé.</li>';
+    el.innerHTML = '<div class="friends-empty">Zatím žádní přátelé — přidej je vyhledáním výše.</div>';
     return;
   }
-  el.innerHTML = keys.map(k =>
-    '<li><span>' + friends[k] + '</span><span class="friend-remove" data-friend-key="' + k + '">✕</span></li>'
-  ).join("");
+  let scoreMap = {};
+  try {
+    const snap = await fbdb.ref("board/top").get();
+    const list = snap.exists() ? snap.val() : [];
+    list.forEach(p => {
+      const k = p.key || p.name;
+      if (!scoreMap[k] || p.cpm > scoreMap[k].cpm) scoreMap[k] = p;
+    });
+  } catch (e) { /* leaderboard lookup optional */ }
+  el.innerHTML = keys.map(k => {
+    const found = scoreMap[k];
+    const sub = found ? found.cpm + " zn/min · osobní rekord" : "Zatím bez výsledku";
+    const avatar = found ? avatarInner(found) : "🙂";
+    return '<div class="friend-card">'
+      + '<div class="friend-avatar">' + avatar + '</div>'
+      + '<div class="friend-info"><div class="friend-name">' + friends[k] + '</div><div class="friend-sub">' + sub + '</div></div>'
+      + '<div class="friend-actions">'
+      + '<span class="friend-action-btn" title="Založit závod" data-invite-friend="1">' + svgIcon("flagicon", 15) + '</span>'
+      + '<span class="friend-remove" data-friend-key="' + k + '" title="Odebrat">✕</span>'
+      + '</div></div>';
+  }).join("");
   el.querySelectorAll(".friend-remove").forEach(btn => {
     btn.addEventListener("click", async () => {
       const key = btn.dataset.friendKey;
@@ -1322,6 +1372,9 @@ function renderFriendsList(profile) {
       await saveProfile(p);
       renderFriendsList(p);
     });
+  });
+  el.querySelectorAll("[data-invite-friend]").forEach(btn => {
+    btn.addEventListener("click", () => show("race-home"));
   });
 }
 async function findPlayerByName(name) {
