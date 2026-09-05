@@ -1281,8 +1281,10 @@ function askText(icon, title, sub, placeholder) {
       + '<p class="lu-title">' + title + '</p>'
       + '<p class="lu-sub" style="margin-bottom:14px;">' + sub + '</p>'
       + '<input type="text" id="textPromptInput" placeholder="' + placeholder + '" maxlength="40" style="text-align:center; margin-bottom:12px;">'
+      + '<div style="display:flex; gap:10px;">'
+      + '<button class="btn-secondary" id="textPromptCancel" style="margin-bottom:0;">Zrušit</button>'
       + '<button class="btn-primary" id="textPromptSave" style="margin-bottom:0;">Uložit</button>'
-      + '</div>';
+      + '</div></div>';
     document.body.appendChild(overlay);
     const input = overlay.querySelector("#textPromptInput");
     input.focus();
@@ -1292,8 +1294,13 @@ function askText(icon, title, sub, placeholder) {
       overlay.remove();
       resolve(val);
     }
+    function cancel() {
+      overlay.remove();
+      resolve(null);
+    }
     overlay.querySelector("#textPromptSave").addEventListener("click", submit);
-    input.addEventListener("keydown", e => { if (e.key === "Enter") submit(); });
+    overlay.querySelector("#textPromptCancel").addEventListener("click", cancel);
+    input.addEventListener("keydown", e => { if (e.key === "Enter") submit(); if (e.key === "Escape") cancel(); });
   });
 }
 function showPublicProfile(p) {
@@ -1707,7 +1714,8 @@ async function renderClassSection(profile) {
   if (profile.classId) {
     joinBox.style.display = "none";
     myClassBox.style.display = "";
-    myClassBox.innerHTML = "Jsi ve třídě: <strong>" + (profile.className || profile.classId) + "</strong> &nbsp; <button class=\"btn-secondary\" id=\"leaveClassBtn\" style=\"margin:8px 0 0; padding:6px 12px; font-size:12.5px;\">Opustit třídu</button>";
+    myClassBox.innerHTML = "Jsi ve třídě: <strong>" + (profile.className || profile.classId) + "</strong><br><div style=\"display:flex; gap:8px; margin-top:8px;\"><button class=\"btn-secondary\" id=\"viewClassBtn\" style=\"margin-bottom:0; padding:6px 12px; font-size:12.5px;\">Zobrazit třídu</button><button class=\"btn-secondary\" id=\"leaveClassBtn\" style=\"margin-bottom:0; padding:6px 12px; font-size:12.5px;\">Opustit třídu</button></div>";
+    document.getElementById("viewClassBtn").addEventListener("click", () => openClassDetail(profile.classId, profile.className || "Třída"));
     document.getElementById("leaveClassBtn").addEventListener("click", async () => {
       const ok = await showConfirm("Opustit třídu?", "Učitel tě přestane vidět v přehledu výsledků.");
       if (!ok) return;
@@ -1799,8 +1807,12 @@ async function openClassDetail(classId, className) {
   try {
     const snap = await fbdb.ref("classes/" + classId).get();
     const data = snap.val() || {};
+    const isOwner = !!(currentUser && data.ownerUid === currentUser.uid);
     currentClassInviteCode = data.inviteCode || null;
-    document.getElementById("classDetailCode").textContent = "Kód pro žáky: " + (data.inviteCode || "—");
+    document.getElementById("classDetailCode").textContent = isOwner ? "Kód pro žáky: " + (data.inviteCode || "—") : "";
+    document.getElementById("exportCsvBtn").style.display = isOwner ? "" : "none";
+    document.getElementById("exportPdfBtn").style.display = isOwner ? "" : "none";
+    document.getElementById("deleteClassBtn").style.display = isOwner ? "" : "none";
     const members = data.members || {};
     const rows = Object.values(members).sort((a, b) => (b.xp || 0) - (a.xp || 0));
     const tableEl = document.getElementById("classRosterTable");
