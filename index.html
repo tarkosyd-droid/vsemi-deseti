@@ -119,6 +119,7 @@
   .mode-btn .t { font-family: 'Space Grotesk', sans-serif; font-weight: 700; font-size: 19px; margin-bottom: 6px; }
   .mode-btn .d { font-size: 13.5px; color: var(--tx2); line-height: 1.5; margin-top: auto; }
   .mode-cta { margin-top: 14px; text-align: center; font-weight: 700; font-size: 13px; padding: 11px; border-radius: 10px; background: linear-gradient(135deg, var(--accent), var(--accent2)); color: #060714; }
+  .beginner-cta { background: linear-gradient(135deg, #b06fff, #7f4fff); color: #fff; }
   .lesson-list { display: flex; flex-direction: column; gap: 8px; }
   .lesson-row {
     display: flex; justify-content: space-between; align-items: center;
@@ -251,10 +252,14 @@
   .goprofile-top { display: flex; align-items: center; gap: 14px; margin-bottom: 16px; }
   .goprofile-level-wrap { flex: 1; }
   .goprofile-level-row { display: flex; justify-content: space-between; font-size: 14px; font-weight: 700; margin-bottom: 6px; }
-  .beginner-card { text-align: center; }
-  .beginner-card .t { font-family: 'Space Grotesk', sans-serif; font-weight: 700; font-size: 15px; margin-bottom: 6px; }
-  .beginner-card .d { font-size: 12.5px; color: var(--tx2); line-height: 1.5; }
-  .beginner-card:hover { border-color: var(--accent); }
+  .beginner-card {
+    text-align: center; border-color: rgba(176,111,255,0.5);
+    box-shadow: 0 0 0 1px rgba(176,111,255,0.25), 0 0 28px -6px rgba(176,111,255,0.45);
+  }
+  .beginner-card .ic { display: flex; align-items: center; justify-content: center; }
+  .beginner-card .t { font-family: 'Space Grotesk', sans-serif; font-weight: 700; font-size: 16px; margin-bottom: 6px; }
+  .beginner-card .d { font-size: 12.5px; color: var(--tx2); line-height: 1.5; margin-bottom: 16px; }
+  .beginner-card:hover { border-color: var(--accent2); box-shadow: 0 0 0 1px rgba(176,111,255,0.4), 0 0 34px -4px rgba(176,111,255,0.6); }
   .home-grid { display: flex; flex-direction: column; gap: 12px; }
   .leaderboard-card { padding: 22px; }
   .lb-title { font-family: 'Space Grotesk', sans-serif; font-weight: 700; font-size: 16px; margin: 0 0 14px; }
@@ -446,6 +451,7 @@
         <div class="ic" style="margin-bottom:8px;"><svg width="28" height="28" viewBox="0 0 24 24" style="vertical-align:-3px;"><path d="M12 22v-9M12 13c-4 0-7-3-7-7 4 0 7 2 7 6zm0 0c4 0 7-3 7-7-4 0-7 2-7 6z" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg></div>
         <div class="t">Začínám od nuly</div>
         <div class="d">Nikdy jsi nepsal/a všemi deseti? Tady se to naučíš úplně od začátku, prst po prstu, písmenko po písmenku.</div>
+        <div class="mode-cta beginner-cta">Spustit</div>
       </div>
     </div>
   </div>
