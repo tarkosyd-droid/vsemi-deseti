@@ -137,6 +137,43 @@
   }
   .lesson-row.done-stage { border-color: rgba(78,224,138,0.35); }
   .lesson-row.done-stage .best { color: var(--good); font-weight: 700; }
+  .beginner-grid {
+    display: grid; grid-template-columns: 1fr 1fr; gap: 12px;
+  }
+  @media (max-width: 560px) { .beginner-grid { grid-template-columns: 1fr; } }
+  .beg-card {
+    background: #12151f; border: 1px solid var(--line); border-radius: 14px;
+    padding: 14px; display: flex; flex-direction: column; gap: 10px;
+    transition: border-color 0.15s, box-shadow 0.15s;
+  }
+  .beg-card.locked-stage { opacity: 0.4; }
+  .beg-card.done-stage { border-color: rgba(78,224,138,0.35); }
+  .beg-card.current-stage {
+    grid-column: 1 / -1;
+    border-color: var(--accent);
+    background: linear-gradient(135deg, rgba(111,140,255,0.14), rgba(176,111,255,0.1));
+    box-shadow: 0 0 0 1px var(--accent), 0 0 24px -4px rgba(111,140,255,0.6);
+  }
+  .beg-card-top { display: flex; justify-content: space-between; align-items: center; }
+  .beg-card-name { font-size: 14px; font-weight: 700; }
+  .beg-keycaps { display: flex; gap: 6px; }
+  .beg-keycap {
+    width: 30px; height: 30px; border-radius: 8px; background: #1c2030; border: 1px solid var(--line);
+    display: flex; align-items: center; justify-content: center; font-weight: 700; font-size: 14px;
+    color: var(--tx); box-shadow: 0 2px 0 rgba(0,0,0,0.3);
+    font-family: 'JetBrains Mono', monospace; text-transform: uppercase;
+  }
+  .current-stage .beg-keycap {
+    background: linear-gradient(135deg, var(--accent), var(--accent2)); color: #060714; border-color: transparent;
+  }
+  .beg-mini-kb { display: flex; flex-direction: column; gap: 3px; align-items: center; margin: 2px 0; }
+  .beg-mini-krow { display: flex; gap: 3px; }
+  .beg-mini-key {
+    width: 20px; height: 20px; border-radius: 4px; background: #1c2030; border: 1px solid var(--line);
+    display: flex; align-items: center; justify-content: center; font-size: 9px; font-weight: 700;
+    color: var(--tx2); font-family: 'JetBrains Mono', monospace;
+  }
+  .beg-mini-key.hit { box-shadow: 0 0 6px -1px rgba(255,255,255,0.5); font-weight: 800; }
   .lesson-row.current-stage { cursor: default; }
   .lesson-row.current-stage:hover { transform: none; }
   .level-dots { display: flex; gap: 8px; }
@@ -627,7 +664,7 @@
       <div class="beginner-rule"><span class="beginner-rule-num">1</span><p>Nedívej se na klávesnici. Na začátku je úplně normální dělat chyby. Cílem teď není psát bezchybně očima, ale naučit prsty pohyb samy od sebe. Sleduj obrazovku, ne prsty.</p></div>
       <div class="beginner-rule"><span class="beginner-rule-num">2</span><p>Přesnost především, rychlost přijde sama. Když spěcháš a děláš hodně chyb, učíš si špatné pohyby, které se pak těžko odnaučují.</p></div>
     </div>
-    <div class="lesson-list" id="beginnerList"></div>
+    <div class="beginner-grid" id="beginnerList"></div>
   </div>
 
   <div id="screen-solo" class="card" style="display:none;">
@@ -766,20 +803,20 @@ function flashKey(el, ch, ok) {
 
 /* ---------- lessons (real words, no diacritics) ---------- */
 const BEGINNER_STAGES = [
-  { id: "beg1", name: "Krok 1: f, j", hint: "Ukazováček levé ruky na F, ukazováček pravé ruky na J. Tam se prsty vždy vrací.", texts: ["fff jjj fjfj jfjf ff jj fj jf fff jjj", "fff jjj fjfj jfjf ff jj fj jf fff jjj fff jjj fjfj jfjf ff jj fj jf fff jjj", "fff jjj fjfj jfjf ff jj fj jf fff jjj fff jjj fjfj jfjf ff jj fj jf fff jjj fff jjj fjfj jfjf ff jj fj jf fff jjj"] },
-  { id: "beg2", name: "Krok 2: d, k", hint: "Prostředníček levé ruky na D, prostředníček pravé ruky na K.", texts: ["ddd kkk dkdk kdkd dd kk dk kd fdjk kdjf", "ddd kkk dkdk kdkd dd kk dk kd fdjk kdjf ddd kkk dkdk kdkd dd kk dk kd fdjk kdjf", "ddd kkk dkdk kdkd dd kk dk kd fdjk kdjf ddd kkk dkdk kdkd dd kk dk kd fdjk kdjf ddd kkk dkdk kdkd dd kk dk kd fdjk kdjf"] },
-  { id: "beg3", name: "Krok 3: s, l", hint: "Prsteníček levé ruky na S, prsteníček pravé ruky na L.", texts: ["sss lll slsl lsls ss ll sl ls dls sld fjdk", "sss lll slsl lsls ss ll sl ls dls sld fjdk sss lll slsl lsls ss ll sl ls dls sld fjdk", "sss lll slsl lsls ss ll sl ls dls sld fjdk sss lll slsl lsls ss ll sl ls dls sld fjdk sss lll slsl lsls ss ll sl ls dls sld fjdk"] },
-  { id: "beg4", name: "Krok 4: a", hint: "Malíček levé ruky na A. Teď už umíš svoje první slovo!", texts: ["aaa fja fdsa jkl sad dal jak lak sklad kladla skladal", "aaa fja fdsa jkl sad dal jak lak sklad kladla skladal aaa fja fdsa jkl sad dal jak lak sklad kladla skladal", "aaa fja fdsa jkl sad dal jak lak sklad kladla skladal aaa fja fdsa jkl sad dal jak lak sklad kladla skladal aaa fja fdsa jkl sad dal jak lak sklad kladla skladal"] },
-  { id: "beg5", name: "Krok 5: g, h", hint: "Ukazováček levé ruky natáhni na G, ukazováček pravé ruky na H.", texts: ["ggg hhh gh hg had hlas hala sad dal jak lak sklad", "ggg hhh gh hg had hlas hala sad dal jak lak sklad ggg hhh gh hg had hlas hala sad dal jak lak sklad", "ggg hhh gh hg had hlas hala sad dal jak lak sklad ggg hhh gh hg had hlas hala sad dal jak lak sklad ggg hhh gh hg had hlas hala sad dal jak lak sklad"] },
-  { id: "beg6", name: "Krok 6: e, i", hint: "Prostředníček levé ruky nahoru na E, prostředníček pravé ruky nahoru na I.", texts: ["eee iii ei ie les dej jde sedla had hlas hala sad dal", "eee iii ei ie les dej jde sedla had hlas hala sad dal eee iii ei ie les dej jde sedla had hlas hala sad dal", "eee iii ei ie les dej jde sedla had hlas hala sad dal eee iii ei ie les dej jde sedla had hlas hala sad dal eee iii ei ie les dej jde sedla had hlas hala sad dal"] },
-  { id: "beg7", name: "Krok 7: r, u", hint: "Ukazováček levé ruky na R, ukazováček pravé ruky na U.", texts: ["rrr uuu ru ur dar kraj sud les dej jde sedla had hlas", "rrr uuu ru ur dar kraj sud les dej jde sedla had hlas rrr uuu ru ur dar kraj sud les dej jde sedla had hlas", "rrr uuu ru ur dar kraj sud les dej jde sedla had hlas rrr uuu ru ur dar kraj sud les dej jde sedla had hlas rrr uuu ru ur dar kraj sud les dej jde sedla had hlas"] },
-  { id: "beg8", name: "Krok 8: w, o", hint: "Prsteníček levé ruky na W, prsteníček pravé ruky na O.", texts: ["www ooo wo ow kolo sokol dar kraj sud les dej jde sedla", "www ooo wo ow kolo sokol dar kraj sud les dej jde sedla www ooo wo ow kolo sokol dar kraj sud les dej jde sedla", "www ooo wo ow kolo sokol dar kraj sud les dej jde sedla www ooo wo ow kolo sokol dar kraj sud les dej jde sedla www ooo wo ow kolo sokol dar kraj sud les dej jde sedla"] },
-  { id: "beg9", name: "Krok 9: q, p", hint: "Malíček levé ruky na Q, malíček pravé ruky na P.", texts: ["qqq ppp qp pq pes pole spor kolo sokol dar kraj sud les", "qqq ppp qp pq pes pole spor kolo sokol dar kraj sud les qqq ppp qp pq pes pole spor kolo sokol dar kraj sud les", "qqq ppp qp pq pes pole spor kolo sokol dar kraj sud les qqq ppp qp pq pes pole spor kolo sokol dar kraj sud les qqq ppp qp pq pes pole spor kolo sokol dar kraj sud les"] },
-  { id: "beg10", name: "Krok 10: t, y", hint: "Ukazováček levé ruky na T, ukazováček pravé ruky na Y.", texts: ["ttt yyy ty yt auto dort star jistota pes pole spor kolo", "ttt yyy ty yt auto dort star jistota pes pole spor kolo ttt yyy ty yt auto dort star jistota pes pole spor kolo", "ttt yyy ty yt auto dort star jistota pes pole spor kolo ttt yyy ty yt auto dort star jistota pes pole spor kolo ttt yyy ty yt auto dort star jistota pes pole spor kolo"] },
-  { id: "beg11", name: "Krok 11: z, m", hint: "Malíček levé ruky dolů na Z, ukazováček pravé ruky dolů na M.", texts: ["zzz mmm zm mz zima moje zase auto dort star jistota pes", "zzz mmm zm mz zima moje zase auto dort star jistota pes zzz mmm zm mz zima moje zase auto dort star jistota pes", "zzz mmm zm mz zima moje zase auto dort star jistota pes zzz mmm zm mz zima moje zase auto dort star jistota pes zzz mmm zm mz zima moje zase auto dort star jistota pes"] },
-  { id: "beg12", name: "Krok 12: x, n", hint: "Prsteníček levé ruky dolů na X, ukazováček pravé ruky dolů na N.", texts: ["xxx nnn xn nx nos noha kmen zima moje zase auto dort star", "xxx nnn xn nx nos noha kmen zima moje zase auto dort star xxx nnn xn nx nos noha kmen zima moje zase auto dort star", "xxx nnn xn nx nos noha kmen zima moje zase auto dort star xxx nnn xn nx nos noha kmen zima moje zase auto dort star xxx nnn xn nx nos noha kmen zima moje zase auto dort star"] },
-  { id: "beg13", name: "Krok 13: c, v", hint: "Prostředníček levé ruky dolů na C, ukazováček levé ruky dolů na V.", texts: ["ccc vvv cv vc voda cena dva nos noha kmen zima moje zase", "ccc vvv cv vc voda cena dva nos noha kmen zima moje zase ccc vvv cv vc voda cena dva nos noha kmen zima moje zase", "ccc vvv cv vc voda cena dva nos noha kmen zima moje zase ccc vvv cv vc voda cena dva nos noha kmen zima moje zase ccc vvv cv vc voda cena dva nos noha kmen zima moje zase"] },
-  { id: "beg14", name: "Krok 14: b — hotovo!", hint: "Ukazováček levé ruky dolů na B. Teď znáš úplně celou abecedu!", texts: ["bbb byt bota obal voda cena dva nos noha kmen zima moje", "bbb byt bota obal voda cena dva nos noha kmen zima moje bbb byt bota obal voda cena dva nos noha kmen zima moje", "bbb byt bota obal voda cena dva nos noha kmen zima moje bbb byt bota obal voda cena dva nos noha kmen zima moje bbb byt bota obal voda cena dva nos noha kmen zima moje"] },
+  { id: "beg1", keys: ["f", "j"], name: "Krok 1: f, j", hint: "Ukazováček levé ruky na F, ukazováček pravé ruky na J. Tam se prsty vždy vrací.", texts: ["fff jjj fjfj jfjf ff jj fj jf fff jjj", "fff jjj fjfj jfjf ff jj fj jf fff jjj fff jjj fjfj jfjf ff jj fj jf fff jjj", "fff jjj fjfj jfjf ff jj fj jf fff jjj fff jjj fjfj jfjf ff jj fj jf fff jjj fff jjj fjfj jfjf ff jj fj jf fff jjj"] },
+  { id: "beg2", keys: ["d", "k"], name: "Krok 2: d, k", hint: "Prostředníček levé ruky na D, prostředníček pravé ruky na K.", texts: ["ddd kkk dkdk kdkd dd kk dk kd fdjk kdjf", "ddd kkk dkdk kdkd dd kk dk kd fdjk kdjf ddd kkk dkdk kdkd dd kk dk kd fdjk kdjf", "ddd kkk dkdk kdkd dd kk dk kd fdjk kdjf ddd kkk dkdk kdkd dd kk dk kd fdjk kdjf ddd kkk dkdk kdkd dd kk dk kd fdjk kdjf"] },
+  { id: "beg3", keys: ["s", "l"], name: "Krok 3: s, l", hint: "Prsteníček levé ruky na S, prsteníček pravé ruky na L.", texts: ["sss lll slsl lsls ss ll sl ls dls sld fjdk", "sss lll slsl lsls ss ll sl ls dls sld fjdk sss lll slsl lsls ss ll sl ls dls sld fjdk", "sss lll slsl lsls ss ll sl ls dls sld fjdk sss lll slsl lsls ss ll sl ls dls sld fjdk sss lll slsl lsls ss ll sl ls dls sld fjdk"] },
+  { id: "beg4", keys: ["a"], name: "Krok 4: a", hint: "Malíček levé ruky na A. Teď už umíš svoje první slovo!", texts: ["aaa fja fdsa jkl sad dal jak lak sklad kladla skladal", "aaa fja fdsa jkl sad dal jak lak sklad kladla skladal aaa fja fdsa jkl sad dal jak lak sklad kladla skladal", "aaa fja fdsa jkl sad dal jak lak sklad kladla skladal aaa fja fdsa jkl sad dal jak lak sklad kladla skladal aaa fja fdsa jkl sad dal jak lak sklad kladla skladal"] },
+  { id: "beg5", keys: ["g", "h"], name: "Krok 5: g, h", hint: "Ukazováček levé ruky natáhni na G, ukazováček pravé ruky na H.", texts: ["ggg hhh gh hg had hlas hala sad dal jak lak sklad", "ggg hhh gh hg had hlas hala sad dal jak lak sklad ggg hhh gh hg had hlas hala sad dal jak lak sklad", "ggg hhh gh hg had hlas hala sad dal jak lak sklad ggg hhh gh hg had hlas hala sad dal jak lak sklad ggg hhh gh hg had hlas hala sad dal jak lak sklad"] },
+  { id: "beg6", keys: ["e", "i"], name: "Krok 6: e, i", hint: "Prostředníček levé ruky nahoru na E, prostředníček pravé ruky nahoru na I.", texts: ["eee iii ei ie les dej jde sedla had hlas hala sad dal", "eee iii ei ie les dej jde sedla had hlas hala sad dal eee iii ei ie les dej jde sedla had hlas hala sad dal", "eee iii ei ie les dej jde sedla had hlas hala sad dal eee iii ei ie les dej jde sedla had hlas hala sad dal eee iii ei ie les dej jde sedla had hlas hala sad dal"] },
+  { id: "beg7", keys: ["r", "u"], name: "Krok 7: r, u", hint: "Ukazováček levé ruky na R, ukazováček pravé ruky na U.", texts: ["rrr uuu ru ur dar kraj sud les dej jde sedla had hlas", "rrr uuu ru ur dar kraj sud les dej jde sedla had hlas rrr uuu ru ur dar kraj sud les dej jde sedla had hlas", "rrr uuu ru ur dar kraj sud les dej jde sedla had hlas rrr uuu ru ur dar kraj sud les dej jde sedla had hlas rrr uuu ru ur dar kraj sud les dej jde sedla had hlas"] },
+  { id: "beg8", keys: ["w", "o"], name: "Krok 8: w, o", hint: "Prsteníček levé ruky na W, prsteníček pravé ruky na O.", texts: ["www ooo wo ow kolo sokol dar kraj sud les dej jde sedla", "www ooo wo ow kolo sokol dar kraj sud les dej jde sedla www ooo wo ow kolo sokol dar kraj sud les dej jde sedla", "www ooo wo ow kolo sokol dar kraj sud les dej jde sedla www ooo wo ow kolo sokol dar kraj sud les dej jde sedla www ooo wo ow kolo sokol dar kraj sud les dej jde sedla"] },
+  { id: "beg9", keys: ["q", "p"], name: "Krok 9: q, p", hint: "Malíček levé ruky na Q, malíček pravé ruky na P.", texts: ["qqq ppp qp pq pes pole spor kolo sokol dar kraj sud les", "qqq ppp qp pq pes pole spor kolo sokol dar kraj sud les qqq ppp qp pq pes pole spor kolo sokol dar kraj sud les", "qqq ppp qp pq pes pole spor kolo sokol dar kraj sud les qqq ppp qp pq pes pole spor kolo sokol dar kraj sud les qqq ppp qp pq pes pole spor kolo sokol dar kraj sud les"] },
+  { id: "beg10", keys: ["t", "y"], name: "Krok 10: t, y", hint: "Ukazováček levé ruky na T, ukazováček pravé ruky na Y.", texts: ["ttt yyy ty yt auto dort star jistota pes pole spor kolo", "ttt yyy ty yt auto dort star jistota pes pole spor kolo ttt yyy ty yt auto dort star jistota pes pole spor kolo", "ttt yyy ty yt auto dort star jistota pes pole spor kolo ttt yyy ty yt auto dort star jistota pes pole spor kolo ttt yyy ty yt auto dort star jistota pes pole spor kolo"] },
+  { id: "beg11", keys: ["z", "m"], name: "Krok 11: z, m", hint: "Malíček levé ruky dolů na Z, ukazováček pravé ruky dolů na M.", texts: ["zzz mmm zm mz zima moje zase auto dort star jistota pes", "zzz mmm zm mz zima moje zase auto dort star jistota pes zzz mmm zm mz zima moje zase auto dort star jistota pes", "zzz mmm zm mz zima moje zase auto dort star jistota pes zzz mmm zm mz zima moje zase auto dort star jistota pes zzz mmm zm mz zima moje zase auto dort star jistota pes"] },
+  { id: "beg12", keys: ["x", "n"], name: "Krok 12: x, n", hint: "Prsteníček levé ruky dolů na X, ukazováček pravé ruky dolů na N.", texts: ["xxx nnn xn nx nos noha kmen zima moje zase auto dort star", "xxx nnn xn nx nos noha kmen zima moje zase auto dort star xxx nnn xn nx nos noha kmen zima moje zase auto dort star", "xxx nnn xn nx nos noha kmen zima moje zase auto dort star xxx nnn xn nx nos noha kmen zima moje zase auto dort star xxx nnn xn nx nos noha kmen zima moje zase auto dort star"] },
+  { id: "beg13", keys: ["c", "v"], name: "Krok 13: c, v", hint: "Prostředníček levé ruky dolů na C, ukazováček levé ruky dolů na V.", texts: ["ccc vvv cv vc voda cena dva nos noha kmen zima moje zase", "ccc vvv cv vc voda cena dva nos noha kmen zima moje zase ccc vvv cv vc voda cena dva nos noha kmen zima moje zase", "ccc vvv cv vc voda cena dva nos noha kmen zima moje zase ccc vvv cv vc voda cena dva nos noha kmen zima moje zase ccc vvv cv vc voda cena dva nos noha kmen zima moje zase"] },
+  { id: "beg14", keys: ["b"], name: "Krok 14: b — hotovo!", hint: "Ukazováček levé ruky dolů na B. Teď znáš úplně celou abecedu!", texts: ["bbb byt bota obal voda cena dva nos noha kmen zima moje", "bbb byt bota obal voda cena dva nos noha kmen zima moje bbb byt bota obal voda cena dva nos noha kmen zima moje", "bbb byt bota obal voda cena dva nos noha kmen zima moje bbb byt bota obal voda cena dva nos noha kmen zima moje bbb byt bota obal voda cena dva nos noha kmen zima moje"] },
 ];
 const LESSONS = [
   { id: "home", name: "Základní řádek", texts: [
@@ -1793,6 +1830,15 @@ let beginnerProgressCache = 0;
 function stageLevelDone(profile, stageId) {
   return (profile.beginnerLevels && profile.beginnerLevels[stageId]) || 0;
 }
+function miniKeyboardHtml(targetKeys) {
+  const set = new Set(targetKeys.map(k => k.toLowerCase()));
+  return '<div class="beg-mini-kb">' + ROWS.slice(1).map(row =>
+    '<div class="beg-mini-krow">' + row.map(([ch, fg]) => {
+      const isHit = set.has(ch);
+      return '<span class="beg-mini-key' + (isHit ? ' hit f-' + fg : '') + '">' + ch + '</span>';
+    }).join("") + '</div>'
+  ).join("") + '</div>';
+}
 async function renderBeginnerList() {
   const el = document.getElementById("beginnerList");
   const profile = await loadProfile();
@@ -1810,27 +1856,34 @@ async function renderBeginnerList() {
     const levelsDone = stageLevelDone(profile, stage.id);
     const stageDone = levelsDone >= 3;
     const prevDone = i === 0 || stageLevelDone(profile, BEGINNER_STAGES[i - 1].id) >= 3;
-    const row = document.createElement("div");
-    row.className = "lesson-row" + (prevDone ? "" : " locked-stage") + (!stageDone && prevDone ? " current-stage" : "") + (stageDone ? " done-stage" : "");
-    if (stageDone) {
-      row.innerHTML = '<span class="name">' + stage.name + '</span><span class="best">' + svgIcon("check", 15) + ' hotovo</span>';
-    } else if (prevDone) {
+    const isCurrent = !stageDone && prevDone;
+    const card = document.createElement("div");
+    card.className = "beg-card" + (prevDone ? "" : " locked-stage") + (isCurrent ? " current-stage" : "") + (stageDone ? " done-stage" : "");
+    const keycaps = '<div class="beg-keycaps">' + stage.keys.map(k => '<span class="beg-keycap">' + k + '</span>').join("") + '</div>';
+    let statusHtml;
+    if (stageDone) statusHtml = '<span class="best">' + svgIcon("check", 15) + ' hotovo</span>';
+    else if (isCurrent) statusHtml = "";
+    else statusHtml = '<span class="best">' + svgIcon("lock", 15) + '</span>';
+    card.innerHTML = '<div class="beg-card-top"><span class="beg-card-name">Krok ' + stageNum + '</span>' + statusHtml + '</div>' + keycaps;
+    if (isCurrent) {
+      card.innerHTML += miniKeyboardHtml(stage.keys);
       const levelBtns = [0, 1, 2].map(lv => {
         const lvDone = levelsDone > lv;
         const lvUnlocked = levelsDone >= lv;
         const cls = "level-dot" + (lvDone ? " lv-done" : lvUnlocked ? " lv-current" : " lv-locked");
         return '<span class="' + cls + '" data-lv="' + lv + '">' + (lvDone ? svgIcon("check", 13) : (lv + 1)) + '</span>';
       }).join("");
-      row.innerHTML = '<span class="name">' + stage.name + '</span><span class="level-dots">' + levelBtns + '</span>';
-      row.querySelectorAll(".level-dot").forEach(dot => {
+      card.innerHTML += '<div class="level-dots">' + levelBtns + '</div>';
+    } else if (!prevDone) {
+      card.title = "Nejdřív dokonči krok " + (stageNum - 1);
+    }
+    if (isCurrent) {
+      card.querySelectorAll(".level-dot").forEach(dot => {
         const lv = parseInt(dot.dataset.lv, 10);
         if (levelsDone >= lv) dot.addEventListener("click", (e) => { e.stopPropagation(); startSolo(stage, stage.texts[lv], lv + 1); });
       });
-    } else {
-      row.innerHTML = '<span class="name">' + stage.name + '</span><span class="best">' + svgIcon("lock", 15) + ' Zamčeno</span>';
-      row.title = "Nejdřív dokonči krok " + (stageNum - 1);
     }
-    el.appendChild(row);
+    el.appendChild(card);
   });
 }
 function renderLessonList() {
