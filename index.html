@@ -212,11 +212,11 @@
   .top-icon-btn {
     width: 64px; height: 64px; border-radius: 50%; background: #1c2030; border: 1px solid var(--line);
     color: var(--tx); display: flex; align-items: center; justify-content: center; cursor: pointer; font-size: 28px;
-    flex-shrink: 0; overflow: hidden;
+    flex-shrink: 0; overflow: hidden; position: relative;
   }
   .top-icon-btn:hover { border-color: var(--accent); }
   .top-icon-btn img { width: 100%; height: 100%; border-radius: 50%; object-fit: cover; display: block; }
-  #topAvatarCircle { width: 100%; height: 100%; display: flex; align-items: center; justify-content: center; }
+  #topAvatarCircle { position: absolute; inset: 0; width: 100%; height: 100%; display: flex; align-items: center; justify-content: center; }
   .friends-search {
     display: flex; background: #12151f; border: 1px solid var(--line); border-radius: 14px;
     padding: 4px; transition: border-color 0.15s, box-shadow 0.15s;
@@ -1270,10 +1270,10 @@ async function recordResult({ cpm, acc, lessonId, isRace, won, textLength, timeM
   }
   newlyEarned.forEach((b, i) => setTimeout(() => showToast("Nový odznak: " + badgeToastIcon(b) + " " + b.name), 1400 + i * 900));
   const { bonus: questBonus, completed: questsCompleted } = updateDailyQuests(profile, { cpm, acc, isRace });
+  if (questBonus > 0) profile.xp += questBonus;
+  await saveProfile(profile);
+  renderProfile(profile);
   if (questBonus > 0) {
-    profile.xp += questBonus;
-    await saveProfile(profile);
-    renderProfile(profile);
     const afterQuestLevel = getLevelInfo(profile.xp).level;
     questsCompleted.forEach((q, i) => setTimeout(() => showToast("Splněný úkol: " + q.label + " (+40 XP)"), 2400 + i * 900));
     if (afterQuestLevel > newLevel) setTimeout(() => showLevelUp(afterQuestLevel), 2200);
