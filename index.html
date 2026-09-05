@@ -1715,7 +1715,7 @@ async function renderClassSection(profile) {
       delete profile.classId;
       delete profile.className;
       await saveProfile(profile);
-      renderProfile(profile);
+      renderClassSection(profile);
     });
   } else {
     joinBox.style.display = "";
@@ -1746,7 +1746,7 @@ document.getElementById("createClassBtn").addEventListener("click", async () => 
     profile.ownedClasses = profile.ownedClasses || {};
     profile.ownedClasses[classId] = name;
     await saveProfile(profile);
-    renderProfile(profile);
+    renderClassSection(profile);
     showToast("Třída „" + name + "“ založena — kód: " + code);
   } catch (e) {
     showToast("Třídu se nepodařilo založit, zkus to znovu.");
@@ -1781,7 +1781,7 @@ document.getElementById("joinClassBtn").addEventListener("click", async () => {
     await saveProfile(profile);
     input.value = "";
     showToast("Přidáno do třídy „" + className + "“");
-    renderProfile(profile);
+    renderClassSection(profile);
   } catch (e) {
     console.error("Chyba při přidávání do třídy:", e);
     errEl.textContent = "Nepodařilo se přidat do třídy, zkus to prosím znovu.";
