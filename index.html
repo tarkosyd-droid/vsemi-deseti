@@ -669,6 +669,7 @@
     <div style="display:flex; gap:8px; margin:12px 0;">
       <button class="btn-secondary" id="exportCsvBtn" style="margin-bottom:0;">Export CSV</button>
       <button class="btn-secondary" id="exportPdfBtn" style="margin-bottom:0;">Export PDF</button>
+      <button class="btn-danger" id="deleteClassBtn" style="margin-bottom:0;">Smazat třídu</button>
     </div>
     <div id="classRosterTable"></div>
   </div>
@@ -1295,6 +1296,23 @@ function askText(icon, title, sub, placeholder) {
     input.addEventListener("keydown", e => { if (e.key === "Enter") submit(); });
   });
 }
+function showPublicProfile(p) {
+  const overlay = document.createElement("div");
+  overlay.className = "levelup-overlay";
+  const avatarHtml = avatarInner(p);
+  const rows = [];
+  if (p.cpm !== undefined) rows.push('<div class="stat"><div class="num">' + Math.round(p.cpm) + '</div><div class="lbl">zn/min</div></div>');
+  if (p.acc !== undefined) rows.push('<div class="stat"><div class="num">' + Math.round(p.acc) + '%</div><div class="lbl">přesnost</div></div>');
+  if (p.lessonsCompleted !== undefined) rows.push('<div class="stat"><div class="num">' + p.lessonsCompleted + '</div><div class="lbl">lekcí</div></div>');
+  if (p.xp !== undefined) rows.push('<div class="stat"><div class="num">' + p.xp + '</div><div class="lbl">XP</div></div>');
+  overlay.innerHTML = '<div class="levelup-card">'
+    + '<div class="lu-icon" style="width:64px; height:64px; border-radius:50%; overflow:hidden; margin:0 auto 10px; display:flex; align-items:center; justify-content:center; background:#1c2030;">' + avatarHtml + '</div>'
+    + '<p class="lu-title" style="font-size:19px;">' + (p.name || "Hráč") + '</p>'
+    + (rows.length ? '<div class="stat-row" style="margin-top:10px;">' + rows.join("") + '</div>' : '<p class="lu-sub">Zatím žádné veřejné výsledky.</p>')
+    + '</div>';
+  document.body.appendChild(overlay);
+  overlay.addEventListener("click", () => overlay.remove());
+}
 function showConfirm(title, message) {
   return new Promise((resolve) => {
     const overlay = document.createElement("div");
@@ -1570,7 +1588,7 @@ async function renderFriendsList(profile) {
     const found = scoreMap[k];
     const sub = found ? found.cpm + " zn/min · osobní rekord" : "Zatím bez výsledku";
     const avatar = found ? avatarInner(found) : "🙂";
-    return '<div class="friend-card">'
+    return '<div class="friend-card" data-view-friend="' + k + '">'
       + '<div class="friend-avatar">' + avatar + '</div>'
       + '<div class="friend-info"><div class="friend-name">' + friends[k] + '</div><div class="friend-sub">' + sub + '</div></div>'
       + '<div class="friend-actions">'
@@ -1578,8 +1596,17 @@ async function renderFriendsList(profile) {
       + '<span class="friend-remove" data-friend-key="' + k + '" title="Odebrat">✕</span>'
       + '</div></div>';
   }).join("");
+  el.querySelectorAll("[data-view-friend]").forEach(card => {
+    card.style.cursor = "pointer";
+    card.addEventListener("click", () => {
+      const k = card.dataset.viewFriend;
+      const found = scoreMap[k];
+      showPublicProfile({ name: friends[k], cpm: found ? found.cpm : undefined, acc: found ? found.acc : undefined, avatar: found ? found.avatar : undefined, avatarUrl: found ? found.avatarUrl : undefined });
+    });
+  });
   el.querySelectorAll(".friend-remove").forEach(btn => {
-    btn.addEventListener("click", async () => {
+    btn.addEventListener("click", async (e) => {
+      e.stopPropagation();
       const key = btn.dataset.friendKey;
       const p = await loadProfile();
       if (p.friends) delete p.friends[key];
@@ -1588,7 +1615,7 @@ async function renderFriendsList(profile) {
     });
   });
   el.querySelectorAll("[data-invite-friend]").forEach(btn => {
-    btn.addEventListener("click", () => show("race-home"));
+    btn.addEventListener("click", (e) => { e.stopPropagation(); show("race-home"); });
   });
 }
 async function claimUsername(uid, nickname) {
@@ -1714,7 +1741,7 @@ document.getElementById("createClassBtn").addEventListener("click", async () => 
     await fbdb.ref("classes/" + classId).set({
       name, ownerUid: currentUser.uid, createdAt: Date.now(), inviteCode: code, members: {}
     });
-    await fbdb.ref("classInvites/" + code).set({ classId, name });
+    await fbdb.ref("classInvites/" + code).set({ classId, name, ownerUid: currentUser.uid });
     const profile = await loadProfile();
     profile.ownedClasses = profile.ownedClasses || {};
     profile.ownedClasses[classId] = name;
@@ -1762,14 +1789,17 @@ document.getElementById("joinClassBtn").addEventListener("click", async () => {
   }
 });
 let currentClassDetailId = null;
+let currentClassInviteCode = null;
 async function openClassDetail(classId, className) {
   currentClassDetailId = classId;
+  currentClassInviteCode = null;
   document.getElementById("classDetailTitle").textContent = className;
   document.getElementById("classDetailCode").textContent = "Načítám…";
   show("class-detail");
   try {
     const snap = await fbdb.ref("classes/" + classId).get();
     const data = snap.val() || {};
+    currentClassInviteCode = data.inviteCode || null;
     document.getElementById("classDetailCode").textContent = "Kód pro žáky: " + (data.inviteCode || "—");
     const members = data.members || {};
     const rows = Object.values(members).sort((a, b) => (b.xp || 0) - (a.xp || 0));
@@ -1778,8 +1808,11 @@ async function openClassDetail(classId, className) {
       tableEl.innerHTML = '<p class="hint">Zatím se nikdo nepřidal — pošli žákům kód výše.</p>';
     } else {
       tableEl.innerHTML = '<table class="roster-table"><thead><tr><th>Jméno</th><th>Ø zn/min</th><th>Ø přesnost</th><th>Lekcí</th><th>XP</th></tr></thead><tbody>' +
-        rows.map(m => '<tr><td>' + (m.name || "—") + '</td><td>' + Math.round(m.cpm || 0) + '</td><td>' + Math.round(m.acc || 0) + '%</td><td>' + (m.lessonsCompleted || 0) + '</td><td>' + (m.xp || 0) + '</td></tr>').join("") +
+        rows.map((m, i) => '<tr data-ridx="' + i + '" style="cursor:pointer;"><td>' + (m.name || "—") + '</td><td>' + Math.round(m.cpm || 0) + '</td><td>' + Math.round(m.acc || 0) + '%</td><td>' + (m.lessonsCompleted || 0) + '</td><td>' + (m.xp || 0) + '</td></tr>').join("") +
         '</tbody></table>';
+      tableEl.querySelectorAll("[data-ridx]").forEach(tr => {
+        tr.addEventListener("click", () => showPublicProfile(rows[parseInt(tr.dataset.ridx, 10)]));
+      });
     }
     window._currentClassRows = rows;
   } catch (e) {
@@ -1828,6 +1861,24 @@ document.getElementById("exportPdfBtn").addEventListener("click", () => {
     doc.save("trida-vysledky.pdf");
   } catch (e) {
     showToast("PDF export se nezdařil, zkus prosím CSV.");
+  }
+});
+document.getElementById("deleteClassBtn").addEventListener("click", async () => {
+  if (!currentClassDetailId) return;
+  const title = document.getElementById("classDetailTitle").textContent;
+  const ok = await showConfirm("Smazat třídu „" + title + "“?", "Nenávratně se smaže i pozvánkový kód. Žáci ve třídě ztratí svoje zařazení.");
+  if (!ok) return;
+  try {
+    if (currentClassInviteCode) await fbdb.ref("classInvites/" + currentClassInviteCode).remove().catch(() => {});
+    await fbdb.ref("classes/" + currentClassDetailId).remove();
+    const profile = await loadProfile();
+    if (profile.ownedClasses) delete profile.ownedClasses[currentClassDetailId];
+    await saveProfile(profile);
+    showToast("Třída smazána");
+    show("school");
+  } catch (e) {
+    console.error("Chyba při mazání třídy:", e);
+    showToast("Třídu se nepodařilo smazat, zkus to znovu.");
   }
 });
 function renderQuests(dailyQuests) {
@@ -1993,7 +2044,7 @@ async function loadHomeLeaderboard() {
     const order = [1, 0, 2].filter(i => top3[i]);
     const podiumHtml = '<div class="podium-row">' + order.map(i => {
       const p = top3[i];
-      return '<div class="podium-col ' + cls[i] + '">'
+      return '<div class="podium-col ' + cls[i] + '" data-pidx="' + i + '">'
         + '<div class="podium-medal"><div class="podium-avatar-inner">' + avatarInner(p) + '</div><span class="medal-badge">' + medal[i] + '</span></div>'
         + '<div class="podium-bar"><span class="podium-step-num">' + stepNum[i] + '</span></div>'
         + '<p class="podium-name">' + p.name + '</p>'
@@ -2001,9 +2052,13 @@ async function loadHomeLeaderboard() {
         + '</div>';
     }).join("") + '</div>';
     const restHtml = rest.length ? '<div class="podium-rest">' + rest.map((p, i) => {
-      return '<div class="row"><span class="n with-avatar"><span class="mini-avatar">' + avatarInner(p) + '</span>' + (i + 4) + '  ' + p.name + '</span><span class="s">' + p.cpm + ' zn/min</span></div>';
+      return '<div class="row" data-pidx="' + (i + 3) + '"><span class="n with-avatar"><span class="mini-avatar">' + avatarInner(p) + '</span>' + (i + 4) + '  ' + p.name + '</span><span class="s">' + p.cpm + ' zn/min</span></div>';
     }).join("") + '</div>' : "";
     el.innerHTML = podiumHtml + restHtml;
+    el.querySelectorAll("[data-pidx]").forEach(node => {
+      node.style.cursor = "pointer";
+      node.addEventListener("click", () => showPublicProfile(list[parseInt(node.dataset.pidx, 10)]));
+    });
   } catch (e) {
     el.innerHTML = '<p class="hint" style="margin:0;">Žebříček se nepodařilo načíst.</p>';
   }
@@ -2032,7 +2087,13 @@ document.getElementById("tabFriends").addEventListener("click", () => {
 
 /* ---------- screen management ---------- */
 let suppressHistoryPush = false;
+let currentScreenId = "home";
+function getBackTargetFor(screenId) {
+  const linkEl = document.querySelector("#screen-" + screenId + " [data-back]");
+  return (linkEl && linkEl.dataset.back) || "home";
+}
 function show(id) {
+  currentScreenId = id;
   ["home","lessons","beginner","solo","solo-done","race-home","lobby","countdown","race","results","profile","school","class-detail"].forEach(s => {
     document.getElementById("screen-" + s).style.display = (s === id) ? "" : "none";
   });
@@ -2049,7 +2110,7 @@ function show(id) {
   }
 }
 window.addEventListener("popstate", (e) => {
-  const target = (e.state && e.state.screen) || "home";
+  const target = (e.state && e.state.screen) || getBackTargetFor(currentScreenId);
   suppressHistoryPush = true;
   show(target);
   suppressHistoryPush = false;
