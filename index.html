@@ -1714,7 +1714,7 @@ document.getElementById("createClassBtn").addEventListener("click", async () => 
     await fbdb.ref("classes/" + classId).set({
       name, ownerUid: currentUser.uid, createdAt: Date.now(), inviteCode: code, members: {}
     });
-    await fbdb.ref("classInvites/" + code).set({ classId });
+    await fbdb.ref("classInvites/" + code).set({ classId, name });
     const profile = await loadProfile();
     profile.ownedClasses = profile.ownedClasses || {};
     profile.ownedClasses[classId] = name;
@@ -1744,8 +1744,7 @@ document.getElementById("joinClassBtn").addEventListener("click", async () => {
       return;
     }
     const classId = snap.val().classId;
-    const classSnap = await fbdb.ref("classes/" + classId + "/name").get();
-    const className = classSnap.exists() ? classSnap.val() : "Třída";
+    const className = snap.val().name || "Třída";
     const profile = await loadProfile();
     await fbdb.ref("classes/" + classId + "/members/" + currentUser.uid).set({
       name: profile.nickname || "Žák", cpm: 0, acc: 0, lessonsCompleted: 0, xp: profile.xp || 0, joinedAt: Date.now()
