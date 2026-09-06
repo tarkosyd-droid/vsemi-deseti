@@ -2190,7 +2190,12 @@ function renderClassTexts(classId, isOwner, customTexts) {
   let html = '<p class="lb-title" style="margin-bottom:8px;">' + svgIcon("scroll", 18) + ' Vlastní texty</p>';
   if (isOwner) {
     html += '<button class="btn-ghost text-add-toggle" id="toggleClassTextFormBtn">+ Přidat vlastní text</button>'
-      + '<div class="class-text-add" id="classTextAddForm" style="display:none;"><div style="flex:1;"><input type="text" id="classTextNameInput" placeholder="Název (nepovinné, např. Jarní slovíčka)" style="margin-bottom:8px;"><textarea id="classTextInput" placeholder="Napiš vlastní text k procvičení pro svoji třídu…"></textarea></div><button class="btn-ghost" id="addClassTextBtn" style="align-self:flex-start;">Přidat</button></div>';
+      + '<div class="class-text-add" id="classTextAddForm" style="display:none;"><div style="flex:1;">'
+      + '<textarea id="classTextInput" placeholder="Napiš vlastní text k procvičení pro svoji třídu…"></textarea>'
+      + '<div id="classTextNameStep" style="display:none; margin-top:8px;">'
+      + '<input type="text" id="classTextNameInput" placeholder="Název (nepovinné, např. Jarní slovíčka)" style="margin-bottom:6px;">'
+      + '<span class="hint" id="classTextBackLink" style="cursor:pointer; text-decoration:underline;">‹ zpět k textu</span>'
+      + '</div></div><button class="btn-ghost" id="addClassTextBtn" style="align-self:flex-start;">Přidat</button></div>';
   }
   if (!list.length) {
     html += '<div class="texts-empty"><div class="te-icon">' + svgIcon("scroll", 30) + '</div><p>'
@@ -2211,13 +2216,27 @@ function renderClassTexts(classId, isOwner, customTexts) {
       formBox.style.display = isOpen ? "none" : "flex";
       toggleBtn.textContent = isOpen ? "+ Přidat vlastní text" : "− Skrýt formulář";
     });
-    document.getElementById("addClassTextBtn").addEventListener("click", async () => {
-      const nameEl = document.getElementById("classTextNameInput");
-      const ta = document.getElementById("classTextInput");
-      const nameVal = nameEl.value.trim();
+    const ta = document.getElementById("classTextInput");
+    const nameStep = document.getElementById("classTextNameStep");
+    const nameEl = document.getElementById("classTextNameInput");
+    const addBtn = document.getElementById("addClassTextBtn");
+    document.getElementById("classTextBackLink").addEventListener("click", () => {
+      nameStep.style.display = "none";
+      addBtn.textContent = "Přidat";
+      ta.focus();
+    });
+    addBtn.addEventListener("click", async () => {
       const val = ta.value.trim();
+      if (nameStep.style.display === "none") {
+        if (!val) return;
+        if (val.length > 2000) { showToast("Text je moc dlouhý (max 2000 znaků)."); return; }
+        nameStep.style.display = "";
+        addBtn.textContent = "Uložit";
+        nameEl.focus();
+        return;
+      }
+      const nameVal = nameEl.value.trim();
       if (!val) return;
-      if (val.length > 2000) { showToast("Text je moc dlouhý (max 2000 znaků)."); return; }
       if (nameVal.length > 60) { showToast("Název je moc dlouhý (max 60 znaků)."); return; }
       try {
         const id = "t" + Math.random().toString(36).slice(2, 10);
@@ -2227,6 +2246,7 @@ function renderClassTexts(classId, isOwner, customTexts) {
         openClassDetail(classId, document.getElementById("classDetailTitle").textContent);
       } catch (e) { showToast("Text se nepodařilo uložit."); }
     });
+    nameEl.addEventListener("keydown", (e) => { if (e.key === "Enter") { e.preventDefault(); addBtn.click(); } });
   }
   box.querySelectorAll(".lesson-row").forEach((row, i) => {
     const item = list[parseInt(row.dataset.tidx, 10)];
