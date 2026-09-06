@@ -2166,7 +2166,7 @@ function textPreview(t) { return t.length > 60 ? t.slice(0, 60) + "…" : t; }
 function updateClassRaceSelect(isOwner, assignments) {
   const list = Object.keys(assignments)
     .map(id => Object.assign({ id: id }, assignments[id]))
-    .filter(a => a.type === "text")
+    .filter(a => a.type === "lesson" && a.lessonId === "custom")
     .sort((a, b) => (a.createdAt || 0) - (b.createdAt || 0));
   window._currentClassTexts = list;
   const sel = document.getElementById("classRaceTextSelect");
@@ -2181,18 +2181,17 @@ function updateClassRaceSelect(isOwner, assignments) {
 const ASSIGNMENT_TYPES = {
   lesson: { name: "Zvládnutí lekce", unit: "% přesnost" },
   speed:  { name: "Rychlostní výzva", unit: "zn/min" },
-  volume: { name: "Objemový trénink", unit: "lekcí" },
-  text:   { name: "Vlastní text", unit: null }
+  volume: { name: "Objemový trénink", unit: "lekcí" }
 };
 function assignmentDesc(a) {
   const t = ASSIGNMENT_TYPES[a.type];
   if (!t) return "";
   if (a.type === "lesson") {
+    if (a.lessonId === "custom") return "Napiš zadaný text od učitele s přesností aspoň " + a.target + "%";
     const l = LESSONS.find(x => x.id === a.lessonId);
     return "Dokonči „" + (l ? l.name : a.lessonId) + "“ s přesností aspoň " + a.target + "%";
   }
   if (a.type === "speed") return "Dosáhni rychlosti aspoň " + a.target + " zn/min";
-  if (a.type === "text") return "Napiš zadaný text od učitele";
   return "Odcvič aspoň " + a.target + " lekcí";
 }
 function assignmentStatus(a, uid) {
@@ -2216,7 +2215,7 @@ function renderClassAssignments(classId, isOwner, assignments, memberCount) {
   } else {
     html += '<div class="lesson-list">' + list.map((a, i) => {
       const doneCount = Object.values(a.progress || {}).filter(p => p && p.done).length;
-      const studentClickable = !isOwner && a.type === "text";
+      const studentClickable = !isOwner && a.type === "lesson" && a.lessonId === "custom";
       const rightSide = isOwner
         ? '<span class="best">' + doneCount + '/' + memberCount + ' splnilo</span><span class="friend-remove" data-del="' + a.id + '" title="Smazat úkol">✕</span>'
         : (() => { const s = assignmentStatus(a, currentUser && currentUser.uid); return '<span class="assign-status ' + s.cls + '">' + s.text + '</span>' + (studentClickable ? '<span class="best">Procvičit →</span>' : ''); })();
@@ -2245,7 +2244,7 @@ function renderClassAssignments(classId, isOwner, assignments, memberCount) {
     box.querySelectorAll(".lesson-row:not(.static-row)").forEach(row => {
       const item = list[parseInt(row.dataset.aidx, 10)];
       row.addEventListener("click", () => {
-        startSolo({ id: "assigntext_" + item.id, name: item.label || "Text od učitele", texts: [item.text], classId: classId, assignmentId: item.id });
+        startSolo({ id: "assigntext_" + item.id, name: item.label || "Text od učitele", texts: [item.text], classId: classId, assignmentId: item.id, targetAcc: item.target });
       });
     });
   }
@@ -2254,7 +2253,7 @@ function showAssignmentDialog(classId, existing) {
   const isEdit = !!existing;
   const overlay = document.createElement("div");
   overlay.className = "levelup-overlay";
-  const lessonOptions = LESSONS.map(l => '<option value="' + l.id + '">' + l.name + '</option>').join("");
+  const lessonOptions = LESSONS.map(l => '<option value="' + l.id + '">' + l.name + '</option>').join("") + '<option value="custom">Vlastní text</option>';
   overlay.innerHTML = '<div class="levelup-card form-card" style="cursor:default; width:100%; max-width:460px; text-align:left;">'
     + '<p class="lu-title" style="margin-bottom:14px;">' + (isEdit ? "Upravit úkol" : "Nový úkol") + '</p>'
     + '<div class="assign-form">'
@@ -2262,11 +2261,10 @@ function showAssignmentDialog(classId, existing) {
     + '<option value="lesson">Zvládnutí lekce</option>'
     + '<option value="speed">Rychlostní výzva</option>'
     + '<option value="volume">Objemový trénink</option>'
-    + '<option value="text">Vlastní text</option>'
     + '</select></div>'
     + '<div id="assignLessonRow"><label>Lekce</label><select id="assignLessonId">' + lessonOptions + '</select></div>'
-    + '<div id="assignTargetRow"><label id="assignTargetLabel">Cílová přesnost (%)</label><input type="number" id="assignTarget" min="1" placeholder="např. 95"></div>'
     + '<div id="assignTextRow" style="display:none;"><label>Text k procvičení</label><textarea id="assignTextContent" placeholder="Napiš text, který mají žáci procvičit…"></textarea></div>'
+    + '<div><label id="assignTargetLabel">Cílová přesnost (%)</label><input type="number" id="assignTarget" min="1" placeholder="např. 95"></div>'
     + '<div><label>Název úkolu (nepovinné)</label><input type="text" id="assignLabel" placeholder="např. Týdenní úkol"></div>'
     + '<div><label>Deadline</label><input type="datetime-local" id="assignDeadline"></div>'
     + '<p class="err" id="assignErr" style="min-height:0;"></p>'
@@ -2277,20 +2275,21 @@ function showAssignmentDialog(classId, existing) {
   document.body.appendChild(overlay);
   const typeSel = overlay.querySelector("#assignType");
   const lessonRow = overlay.querySelector("#assignLessonRow");
-  const targetRow = overlay.querySelector("#assignTargetRow");
+  const lessonSel = overlay.querySelector("#assignLessonId");
   const textRow = overlay.querySelector("#assignTextRow");
   const targetLabel = overlay.querySelector("#assignTargetLabel");
   function syncFields() {
     const t = typeSel.value;
+    const isCustomLesson = t === "lesson" && lessonSel.value === "custom";
     lessonRow.style.display = t === "lesson" ? "" : "none";
-    targetRow.style.display = t === "text" ? "none" : "";
-    textRow.style.display = t === "text" ? "" : "none";
+    textRow.style.display = isCustomLesson ? "" : "none";
     targetLabel.textContent = t === "lesson" ? "Cílová přesnost (%)" : t === "speed" ? "Cílová rychlost (zn/min)" : "Počet lekcí";
   }
   typeSel.addEventListener("change", syncFields);
+  lessonSel.addEventListener("change", syncFields);
   if (isEdit) {
     typeSel.value = existing.type;
-    if (existing.lessonId) overlay.querySelector("#assignLessonId").value = existing.lessonId;
+    if (existing.lessonId) lessonSel.value = existing.lessonId;
     if (existing.target !== undefined) overlay.querySelector("#assignTarget").value = existing.target;
     if (existing.text) overlay.querySelector("#assignTextContent").value = existing.text;
     overlay.querySelector("#assignLabel").value = existing.label || "";
@@ -2305,20 +2304,20 @@ function showAssignmentDialog(classId, existing) {
     const type = typeSel.value;
     const deadlineVal = overlay.querySelector("#assignDeadline").value;
     const label = overlay.querySelector("#assignLabel").value.trim();
+    const target = parseInt(overlay.querySelector("#assignTarget").value, 10);
     if (!deadlineVal) { errEl.textContent = "Zadej deadline."; return; }
     const deadline = new Date(deadlineVal).getTime();
     if (!deadline || (!isEdit && deadline <= Date.now())) { errEl.textContent = "Deadline musí být v budoucnu."; return; }
-    const payload = { type: type, deadline: deadline, createdAt: isEdit ? existing.createdAt : Date.now() };
-    if (type === "text") {
-      const textVal = overlay.querySelector("#assignTextContent").value.trim();
-      if (!textVal) { errEl.textContent = "Napiš text k procvičení."; return; }
-      if (textVal.length > 2000) { errEl.textContent = "Text je moc dlouhý (max 2000 znaků)."; return; }
-      payload.text = textVal;
-    } else {
-      const target = parseInt(overlay.querySelector("#assignTarget").value, 10);
-      if (!target || target <= 0) { errEl.textContent = "Zadej cílovou hodnotu."; return; }
-      payload.target = target;
-      if (type === "lesson") payload.lessonId = overlay.querySelector("#assignLessonId").value;
+    if (!target || target <= 0) { errEl.textContent = "Zadej cílovou hodnotu."; return; }
+    const payload = { type: type, target: target, deadline: deadline, createdAt: isEdit ? existing.createdAt : Date.now() };
+    if (type === "lesson") {
+      payload.lessonId = lessonSel.value;
+      if (lessonSel.value === "custom") {
+        const textVal = overlay.querySelector("#assignTextContent").value.trim();
+        if (!textVal) { errEl.textContent = "Napiš text k procvičení."; return; }
+        if (textVal.length > 2000) { errEl.textContent = "Text je moc dlouhý (max 2000 znaků)."; return; }
+        payload.text = textVal;
+      }
     }
     if (label) payload.label = label;
     try {
@@ -2789,8 +2788,9 @@ function startSolo(lesson, text, beginnerLevel) {
       const qualifiesForBoard = lesson.id === "long" || lesson.id === "free";
       if (qualifiesForBoard) submitToLeaderboard((cachedProfile && cachedProfile.nickname) || playerName || "Anonym", cpmDone, accDone);
       if (isCustomLesson && lesson.classId && lesson.assignmentId && currentUser) {
+        const passedTarget = lesson.targetAcc === undefined || lesson.targetAcc === null || accDone >= lesson.targetAcc;
         fbdb.ref("classes/" + lesson.classId + "/assignments/" + lesson.assignmentId + "/progress/" + currentUser.uid)
-          .set({ done: true, completedAt: Date.now(), cpm: cpmDone, acc: accDone })
+          .set({ done: passedTarget, completedAt: Date.now(), cpm: cpmDone, acc: accDone })
           .catch(() => {});
       }
       recordResult({
