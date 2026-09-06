@@ -1294,8 +1294,8 @@ fbauth.onAuthStateChanged(async (user) => {
     try {
       const snap = await fbdb.ref("users/" + user.uid + "/profile").get();
       if (!snap.exists()) {
-        const consented = await askAgeConsent();
-        if (!consented) {
+        const consent = await askAgeConsent();
+        if (consent === "no") {
           await fbauth.signOut();
           showToast("Bez potvrzení se nelze zaregistrovat.");
           return;
@@ -1303,6 +1303,7 @@ fbauth.onAuthStateChanged(async (user) => {
         const localRaw = localStorage.getItem("profile:me");
         const migrated = localRaw ? JSON.parse(localRaw) : { xp: 0, streak: 0, lastActiveDate: null, badges: [], lessonsCompleted: 0 };
         migrated.consentAt = Date.now();
+        migrated.consentType = consent;
         await fbdb.ref("users/" + user.uid + "/profile").set(migrated);
       }
       const freshSnap = await fbdb.ref("users/" + user.uid + "/profile").get();
@@ -1441,13 +1442,15 @@ function askAgeConsent() {
     overlay.innerHTML = '<div class="levelup-card" style="cursor:default; max-width:360px;">'
       + '<div class="lu-icon">🔒</div>'
       + '<p class="lu-title">Než začneš</p>'
-      + '<p class="lu-sub" style="margin-bottom:16px; text-align:left; line-height:1.5;">Je ti 15 let nebo více, nebo ti se založením účtu a se zpracováním tvých údajů souhlasí rodič či zákonný zástupce? Přečti si <a href="zasady.html" target="_blank" rel="noopener" style="color:var(--accent);">zásady ochrany osobních údajů</a>.</p>'
+      + '<p class="lu-sub" style="margin-bottom:14px; text-align:left; line-height:1.5;">Je ti 15 let nebo více, nebo ti se založením účtu souhlasí rodič či zákonný zástupce? Přečti si <a href="zasady.html" target="_blank" rel="noopener" style="color:var(--accent);">zásady ochrany osobních údajů</a>.</p>'
       + '<button class="btn-primary" id="ageConsentYes" style="margin-bottom:8px;">Ano, souhlasím</button>'
+      + '<button class="btn-secondary" id="ageConsentSchool" style="margin-bottom:8px;">Ne, ale jsem tu přes školu/učitele</button>'
       + '<button class="btn-secondary" id="ageConsentNo" style="margin-bottom:0;">Ne</button>'
       + '</div>';
     document.body.appendChild(overlay);
-    overlay.querySelector("#ageConsentYes").addEventListener("click", () => { overlay.remove(); resolve(true); });
-    overlay.querySelector("#ageConsentNo").addEventListener("click", () => { overlay.remove(); resolve(false); });
+    overlay.querySelector("#ageConsentYes").addEventListener("click", () => { overlay.remove(); resolve("self"); });
+    overlay.querySelector("#ageConsentSchool").addEventListener("click", () => { overlay.remove(); resolve("school"); });
+    overlay.querySelector("#ageConsentNo").addEventListener("click", () => { overlay.remove(); resolve("no"); });
   });
 }
 function askNickname() {
