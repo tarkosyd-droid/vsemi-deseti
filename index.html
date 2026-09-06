@@ -306,6 +306,15 @@
     background: transparent; border: 1px solid transparent; color: var(--tx2);
   }
   .btn-icon-danger:hover { background: rgba(255,107,125,0.12); color: var(--bad); border-color: rgba(255,107,125,0.35); }
+  .race-text-select {
+    font-family: 'Inter', sans-serif; font-size: 13px; color: var(--tx2); background: #1c2030;
+    border: 1px solid var(--line); border-radius: 12px; padding: 11px 10px; max-width: 160px;
+  }
+  .class-text-add { display: flex; gap: 8px; align-items: flex-start; margin-bottom: 10px; }
+  .class-text-add textarea {
+    flex: 1; min-height: 60px; resize: vertical; font-family: inherit; font-size: 14px;
+    padding: 12px 14px; border-radius: 10px; border: 1px solid var(--line); background: #0e1017; color: var(--tx);
+  }
   .friend-card {
     display: flex; align-items: center; gap: 12px; background: #12151f; border: 1px solid var(--line);
     border-radius: 12px; padding: 10px 12px;
@@ -782,11 +791,13 @@
       <button class="class-code-badge" id="classDetailCode" title="Klikni a zkopíruj kód" style="display:none;"></button>
     </div>
     <div class="class-actions" id="classActionsBar">
+      <select id="classRaceTextSelect" class="race-text-select" style="display:none;"></select>
       <button class="btn-primary btn-compact" id="startClassRaceBtn">Spustit závod pro třídu</button>
       <button class="btn-ghost" id="exportCsvBtn">Export CSV</button>
       <button class="btn-ghost" id="exportPdfBtn">Export PDF</button>
       <button class="btn-icon-danger" id="deleteClassBtn" title="Smazat třídu">🗑</button>
     </div>
+    <div id="classTextsBox" style="margin:18px 0;"></div>
     <div id="classRosterTable"></div>
   </div>
 
@@ -2077,6 +2088,7 @@ async function openClassDetail(classId, className) {
       codeEl.textContent = data.inviteCode || "—";
       codeEl.style.display = "";
     }
+    renderClassTexts(classId, isOwner, data.customTexts || {});
     const members = data.members || {};
     const rows = Object.values(members).sort((a, b) => (b.xp || 0) - (a.xp || 0));
     document.getElementById("classDetailCount").textContent = pluralZaci(rows.length);
@@ -2101,6 +2113,62 @@ document.getElementById("classDetailCode").addEventListener("click", async () =>
   try { await navigator.clipboard.writeText(currentClassInviteCode); showToast("Kód zkopírován"); }
   catch (e) { showToast("Kód: " + currentClassInviteCode); }
 });
+function textPreview(t) { return t.length > 60 ? t.slice(0, 60) + "…" : t; }
+function renderClassTexts(classId, isOwner, customTexts) {
+  const list = Object.keys(customTexts).map(id => Object.assign({ id: id }, customTexts[id]))
+    .sort((a, b) => (a.createdAt || 0) - (b.createdAt || 0));
+  window._currentClassTexts = list;
+  const sel = document.getElementById("classRaceTextSelect");
+  if (isOwner && list.length) {
+    sel.innerHTML = '<option value="">Náhodný text</option>' + list.map(t => '<option value="' + t.id + '">' + textPreview(t.text) + '</option>').join("");
+    sel.style.display = "";
+  } else {
+    sel.innerHTML = "";
+    sel.style.display = "none";
+  }
+  const box = document.getElementById("classTextsBox");
+  let html = '<p class="lb-title" style="margin-bottom:8px;">' + svgIcon("scroll", 18) + ' Vlastní texty</p>';
+  if (isOwner) {
+    html += '<div class="class-text-add"><textarea id="classTextInput" placeholder="Napiš vlastní text k procvičení pro svoji třídu…"></textarea><button class="btn-ghost" id="addClassTextBtn" style="align-self:flex-start;">Přidat</button></div>';
+  }
+  if (!list.length) {
+    html += '<p class="hint">' + (isOwner ? "Zatím žádné vlastní texty — přidej první výše." : "Učitel zatím nepřidal žádný vlastní text.") + '</p>';
+  } else {
+    html += '<div class="lesson-list">' + list.map((t, i) =>
+      '<div class="lesson-row" data-tidx="' + i + '"><span class="name">' + textPreview(t.text) + '</span>' +
+      (isOwner ? '<span class="friend-remove" data-del="' + t.id + '" title="Smazat text">✕</span>' : '<span class="best">Procvičit →</span>') +
+      '</div>'
+    ).join("") + '</div>';
+  }
+  box.innerHTML = html;
+  if (isOwner) {
+    document.getElementById("addClassTextBtn").addEventListener("click", async () => {
+      const ta = document.getElementById("classTextInput");
+      const val = ta.value.trim();
+      if (!val) return;
+      if (val.length > 2000) { showToast("Text je moc dlouhý (max 2000 znaků)."); return; }
+      try {
+        const id = "t" + Math.random().toString(36).slice(2, 10);
+        await fbdb.ref("classes/" + classId + "/customTexts/" + id).set({ text: val, createdAt: Date.now() });
+        openClassDetail(classId, document.getElementById("classDetailTitle").textContent);
+      } catch (e) { showToast("Text se nepodařilo uložit."); }
+    });
+  }
+  box.querySelectorAll(".lesson-row").forEach(row => {
+    const item = list[parseInt(row.dataset.tidx, 10)];
+    row.addEventListener("click", (e) => {
+      if (e.target.dataset.del) return;
+      startSolo({ id: "custom_" + item.id, name: "Text od učitele", texts: [item.text] });
+    });
+  });
+  box.querySelectorAll("[data-del]").forEach(btn => {
+    btn.addEventListener("click", async (e) => {
+      e.stopPropagation();
+      try { await fbdb.ref("classes/" + classId + "/customTexts/" + btn.dataset.del).remove(); } catch (err) {}
+      openClassDetail(classId, document.getElementById("classDetailTitle").textContent);
+    });
+  });
+}
 document.getElementById("exportCsvBtn").addEventListener("click", () => {
   const rows = window._currentClassRows || [];
   let csv = "Jméno;Ø zn/min;Ø přesnost;Lekcí;XP\n";
@@ -2802,11 +2870,15 @@ document.getElementById("crbJoin").addEventListener("click", async () => {
 document.getElementById("startClassRaceBtn").addEventListener("click", async () => {
   const classId = currentClassDetailId;
   if (!classId) return;
+  const sel = document.getElementById("classRaceTextSelect");
+  const chosen = sel && sel.value ? (window._currentClassTexts || []).find(t => t.id === sel.value) : null;
   playerName = autoPlayerName(); playerId = uid(); lobbyCode = randomCode(); isHost = true;
-  const ok = await writeLobby(lobbyRef(lobbyCode, "meta"), {
+  const meta = {
     code: lobbyCode, hostId: playerId, status: "waiting", startTime: null,
     duration: 45000, createdAt: Date.now(), classId: classId
-  });
+  };
+  if (chosen) meta.customText = chosen.text;
+  const ok = await writeLobby(lobbyRef(lobbyCode, "meta"), meta);
   if (!ok) { showToast("Závod se nepodařilo založit."); return; }
   await joinLobbyAs(lobbyCode);
   try {
@@ -2834,19 +2906,19 @@ function beginCountdownFromLobby(lobby) {
   const dur = lobby.duration || 45000;
   countdownTimer = setInterval(() => {
     const remain = Math.ceil((target - Date.now()) / 1000);
-    if (remain <= 0) { clearInterval(countdownTimer); beginRacing(target, dur, lobby.code); }
+    if (remain <= 0) { clearInterval(countdownTimer); beginRacing(target, dur, lobby.code, lobby.customText); }
     else document.getElementById("countdownNum").textContent = remain;
   }, 100);
 }
 
-function beginRacing(startTime, duration, code) {
+function beginRacing(startTime, duration, code, customText) {
   show("race");
   startPolling();
   const textEl = document.getElementById("raceText");
   const outerEl = document.getElementById("raceTextOuter");
   const kbEl = document.getElementById("raceKeyboard");
   buildKeyboard(kbEl);
-  const raceText = RACE_TEXTS[(hashCode(code + ":" + startTime) >>> 0) % RACE_TEXTS.length];
+  const raceText = customText || RACE_TEXTS[(hashCode(code + ":" + startTime) >>> 0) % RACE_TEXTS.length];
   laneEls = {};
   document.getElementById("raceTrack").innerHTML = "";
   buildRaceTrack();
