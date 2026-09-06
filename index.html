@@ -317,6 +317,13 @@
     flex: 1; min-height: 60px; resize: vertical; font-family: inherit; font-size: 14px;
     padding: 12px 14px; border-radius: 10px; border: 1px solid var(--line); background: #0e1017; color: var(--tx);
   }
+  .assign-status { font-size: 12.5px; font-weight: 700; padding: 4px 10px; border-radius: 8px; }
+  .assign-status.done { background: rgba(78,224,138,0.16); color: var(--good); }
+  .assign-status.active { background: rgba(111,140,255,0.16); color: var(--accent); }
+  .assign-status.missed { background: rgba(255,107,125,0.14); color: var(--bad); }
+  .assign-form { display: flex; flex-direction: column; gap: 10px; text-align: left; }
+  .assign-form select, .assign-form input { margin-bottom: 0; }
+  .assign-form label { font-size: 12.5px; color: var(--tx2); font-weight: 600; }
   .friend-card {
     display: flex; align-items: center; gap: 12px; background: #12151f; border: 1px solid var(--line);
     border-radius: 12px; padding: 10px 12px;
@@ -800,6 +807,7 @@
       <button class="btn-icon-danger" id="deleteClassBtn" title="Smazat třídu">🗑</button>
     </div>
     <div id="classTextsBox" style="margin:18px 0;"></div>
+    <div id="classAssignmentsBox" style="margin:18px 0;"></div>
     <div id="classRosterTable"></div>
   </div>
 
@@ -1674,6 +1682,7 @@ async function recordResult({ cpm, acc, lessonId, isRace, won, textLength, timeM
       lessonsCompleted: lc,
       xp: profile.xp || 0
     }).catch(() => {});
+    checkClassAssignments(profile, ctx);
   }
   const newLevel = getLevelInfo(profile.xp).level;
   if (newLevel > oldLevel) {
@@ -2106,6 +2115,7 @@ async function openClassDetail(classId, className) {
     renderClassTexts(classId, isOwner, data.customTexts || {});
     const members = data.members || {};
     const rows = Object.values(members).sort((a, b) => (b.xp || 0) - (a.xp || 0));
+    renderClassAssignments(classId, isOwner, data.assignments || {}, Object.keys(members).length);
     document.getElementById("classDetailCount").textContent = pluralZaci(rows.length);
     const tableEl = document.getElementById("classRosterTable");
     if (!rows.length) {
@@ -2129,13 +2139,17 @@ document.getElementById("classDetailCode").addEventListener("click", async () =>
   catch (e) { showToast("Kód: " + currentClassInviteCode); }
 });
 function textPreview(t) { return t.length > 60 ? t.slice(0, 60) + "…" : t; }
+function textLabel(t, i, isOwner) {
+  if (t.label) return t.label;
+  return isOwner ? textPreview(t.text) : "Text od učitele " + (i + 1);
+}
 function renderClassTexts(classId, isOwner, customTexts) {
   const list = Object.keys(customTexts).map(id => Object.assign({ id: id }, customTexts[id]))
     .sort((a, b) => (a.createdAt || 0) - (b.createdAt || 0));
   window._currentClassTexts = list;
   const sel = document.getElementById("classRaceTextSelect");
   if (isOwner && list.length) {
-    sel.innerHTML = '<option value="">Náhodný text</option>' + list.map(t => '<option value="' + t.id + '">' + textPreview(t.text) + '</option>').join("");
+    sel.innerHTML = '<option value="">Náhodný text</option>' + list.map(t => '<option value="' + t.id + '">' + (t.label || textPreview(t.text)) + '</option>').join("");
     sel.style.display = "";
   } else {
     sel.innerHTML = "";
@@ -2144,13 +2158,13 @@ function renderClassTexts(classId, isOwner, customTexts) {
   const box = document.getElementById("classTextsBox");
   let html = '<p class="lb-title" style="margin-bottom:8px;">' + svgIcon("scroll", 18) + ' Vlastní texty</p>';
   if (isOwner) {
-    html += '<div class="class-text-add"><textarea id="classTextInput" placeholder="Napiš vlastní text k procvičení pro svoji třídu…"></textarea><button class="btn-ghost" id="addClassTextBtn" style="align-self:flex-start;">Přidat</button></div>';
+    html += '<div class="class-text-add"><div style="flex:1;"><input type="text" id="classTextNameInput" placeholder="Název (nepovinné, např. Jarní slovíčka)" style="margin-bottom:8px;"><textarea id="classTextInput" placeholder="Napiš vlastní text k procvičení pro svoji třídu…"></textarea></div><button class="btn-ghost" id="addClassTextBtn" style="align-self:flex-start;">Přidat</button></div>';
   }
   if (!list.length) {
     html += '<p class="hint">' + (isOwner ? "Zatím žádné vlastní texty — přidej první výše." : "Učitel zatím nepřidal žádný vlastní text.") + '</p>';
   } else {
     html += '<div class="lesson-list">' + list.map((t, i) =>
-      '<div class="lesson-row" data-tidx="' + i + '"><span class="name">' + (isOwner ? textPreview(t.text) : "Text od učitele " + (i + 1)) + '</span>' +
+      '<div class="lesson-row" data-tidx="' + i + '"><span class="name">' + textLabel(t, i, isOwner) + '</span>' +
       (isOwner ? '<span class="best">Výsledky →</span><span class="friend-remove" data-del="' + t.id + '" title="Smazat text">✕</span>' : '<span class="best">Procvičit →</span>') +
       '</div>'
     ).join("") + '</div>';
@@ -2158,13 +2172,18 @@ function renderClassTexts(classId, isOwner, customTexts) {
   box.innerHTML = html;
   if (isOwner) {
     document.getElementById("addClassTextBtn").addEventListener("click", async () => {
+      const nameEl = document.getElementById("classTextNameInput");
       const ta = document.getElementById("classTextInput");
+      const nameVal = nameEl.value.trim();
       const val = ta.value.trim();
       if (!val) return;
       if (val.length > 2000) { showToast("Text je moc dlouhý (max 2000 znaků)."); return; }
+      if (nameVal.length > 60) { showToast("Název je moc dlouhý (max 60 znaků)."); return; }
       try {
         const id = "t" + Math.random().toString(36).slice(2, 10);
-        await fbdb.ref("classes/" + classId + "/customTexts/" + id).set({ text: val, createdAt: Date.now() });
+        const payload = { text: val, createdAt: Date.now() };
+        if (nameVal) payload.label = nameVal;
+        await fbdb.ref("classes/" + classId + "/customTexts/" + id).set(payload);
         openClassDetail(classId, document.getElementById("classDetailTitle").textContent);
       } catch (e) { showToast("Text se nepodařilo uložit."); }
     });
@@ -2173,8 +2192,8 @@ function renderClassTexts(classId, isOwner, customTexts) {
     const item = list[parseInt(row.dataset.tidx, 10)];
     row.addEventListener("click", (e) => {
       if (e.target.dataset.del) return;
-      if (isOwner) { showTextResults(classId, item.id, "Text od učitele " + (i + 1)); return; }
-      startSolo({ id: "custom_" + item.id, name: "Text od učitele", texts: [item.text], classId: classId, customTextId: item.id });
+      if (isOwner) { showTextResults(classId, item.id, textLabel(item, i, true)); return; }
+      startSolo({ id: "custom_" + item.id, name: textLabel(item, i, false), texts: [item.text], classId: classId, customTextId: item.id });
     });
   });
   box.querySelectorAll("[data-del]").forEach(btn => {
@@ -2184,6 +2203,131 @@ function renderClassTexts(classId, isOwner, customTexts) {
       openClassDetail(classId, document.getElementById("classDetailTitle").textContent);
     });
   });
+}
+const ASSIGNMENT_TYPES = {
+  lesson: { name: "Zvládnutí lekce", unit: "% přesnost" },
+  speed:  { name: "Rychlostní výzva", unit: "zn/min" },
+  volume: { name: "Objemový trénink", unit: "lekcí" }
+};
+function assignmentDesc(a) {
+  const t = ASSIGNMENT_TYPES[a.type];
+  if (!t) return "";
+  if (a.type === "lesson") {
+    const l = LESSONS.find(x => x.id === a.lessonId);
+    return "Dokonči „" + (l ? l.name : a.lessonId) + "“ s přesností aspoň " + a.target + "%";
+  }
+  if (a.type === "speed") return "Dosáhni rychlosti aspoň " + a.target + " zn/min";
+  return "Odcvič aspoň " + a.target + " lekcí";
+}
+function assignmentStatus(a, uid) {
+  const done = !!(a.progress && a.progress[uid] && a.progress[uid].done);
+  if (done) return { cls: "done", text: "Splněno" };
+  if (a.deadline && a.deadline < Date.now()) return { cls: "missed", text: "Nesplněno" };
+  return { cls: "active", text: "Aktivní" };
+}
+function formatDeadline(ts) {
+  const d = new Date(ts);
+  return d.toLocaleDateString("cs-CZ") + " " + d.toLocaleTimeString("cs-CZ", { hour: "2-digit", minute: "2-digit" });
+}
+function renderClassAssignments(classId, isOwner, assignments, memberCount) {
+  const list = Object.keys(assignments).map(id => Object.assign({ id: id }, assignments[id]))
+    .sort((a, b) => (a.createdAt || 0) - (b.createdAt || 0));
+  const box = document.getElementById("classAssignmentsBox");
+  let html = '<p class="lb-title" style="margin-bottom:8px;">' + svgIcon("target", 18) + ' Úkoly</p>';
+  if (isOwner) html += '<button class="btn-ghost" id="newAssignmentBtn" style="width:auto; margin-bottom:12px;">+ Nový úkol</button>';
+  if (!list.length) {
+    html += '<p class="hint">' + (isOwner ? "Zatím žádné úkoly." : "Učitel zatím nezadal žádný úkol.") + '</p>';
+  } else {
+    html += '<div class="lesson-list">' + list.map((a, i) => {
+      const doneCount = Object.values(a.progress || {}).filter(p => p && p.done).length;
+      const rightSide = isOwner
+        ? '<span class="best">' + doneCount + '/' + memberCount + ' splnilo</span>'
+        : (() => { const s = assignmentStatus(a, currentUser && currentUser.uid); return '<span class="assign-status ' + s.cls + '">' + s.text + '</span>'; })();
+      return '<div class="lesson-row static-row" data-aidx="' + i + '"><span class="name">' + (a.label || ASSIGNMENT_TYPES[a.type].name) + '<br><span class="hint" style="font-size:12px;">' + assignmentDesc(a) + ' · do ' + formatDeadline(a.deadline) + '</span></span>' + rightSide + '</div>';
+    }).join("") + '</div>';
+  }
+  box.innerHTML = html;
+  if (isOwner) {
+    document.getElementById("newAssignmentBtn").addEventListener("click", () => showNewAssignmentDialog(classId));
+  }
+}
+function showNewAssignmentDialog(classId) {
+  const overlay = document.createElement("div");
+  overlay.className = "levelup-overlay";
+  const lessonOptions = LESSONS.map(l => '<option value="' + l.id + '">' + l.name + '</option>').join("");
+  overlay.innerHTML = '<div class="levelup-card" style="cursor:default; max-width:360px; text-align:left;">'
+    + '<p class="lu-title" style="margin-bottom:14px;">Nový úkol</p>'
+    + '<div class="assign-form">'
+    + '<div><label>Typ úkolu</label><select id="assignType">'
+    + '<option value="lesson">Zvládnutí lekce</option>'
+    + '<option value="speed">Rychlostní výzva</option>'
+    + '<option value="volume">Objemový trénink</option>'
+    + '</select></div>'
+    + '<div id="assignLessonRow"><label>Lekce</label><select id="assignLessonId">' + lessonOptions + '</select></div>'
+    + '<div><label id="assignTargetLabel">Cílová přesnost (%)</label><input type="number" id="assignTarget" min="1" placeholder="např. 95"></div>'
+    + '<div><label>Název úkolu (nepovinné)</label><input type="text" id="assignLabel" placeholder="např. Týdenní úkol"></div>'
+    + '<div><label>Deadline</label><input type="datetime-local" id="assignDeadline"></div>'
+    + '<p class="err" id="assignErr" style="min-height:0;"></p>'
+    + '<div style="display:flex; gap:10px; margin-top:4px;">'
+    + '<button class="btn-secondary" id="assignCancelBtn" style="margin-bottom:0;">Zrušit</button>'
+    + '<button class="btn-primary" id="assignCreateBtn" style="margin-bottom:0;">Vytvořit</button>'
+    + '</div></div></div>';
+  document.body.appendChild(overlay);
+  const typeSel = overlay.querySelector("#assignType");
+  const lessonRow = overlay.querySelector("#assignLessonRow");
+  const targetLabel = overlay.querySelector("#assignTargetLabel");
+  function syncFields() {
+    lessonRow.style.display = typeSel.value === "lesson" ? "" : "none";
+    targetLabel.textContent = typeSel.value === "lesson" ? "Cílová přesnost (%)" : typeSel.value === "speed" ? "Cílová rychlost (zn/min)" : "Počet lekcí";
+  }
+  typeSel.addEventListener("change", syncFields);
+  syncFields();
+  overlay.querySelector("#assignCancelBtn").addEventListener("click", () => overlay.remove());
+  overlay.querySelector("#assignCreateBtn").addEventListener("click", async () => {
+    const errEl = overlay.querySelector("#assignErr");
+    const type = typeSel.value;
+    const target = parseInt(overlay.querySelector("#assignTarget").value, 10);
+    const deadlineVal = overlay.querySelector("#assignDeadline").value;
+    const label = overlay.querySelector("#assignLabel").value.trim();
+    if (!target || target <= 0) { errEl.textContent = "Zadej cílovou hodnotu."; return; }
+    if (!deadlineVal) { errEl.textContent = "Zadej deadline."; return; }
+    const deadline = new Date(deadlineVal).getTime();
+    if (!deadline || deadline <= Date.now()) { errEl.textContent = "Deadline musí být v budoucnu."; return; }
+    const payload = { type: type, target: target, deadline: deadline, createdAt: Date.now() };
+    if (type === "lesson") payload.lessonId = overlay.querySelector("#assignLessonId").value;
+    if (label) payload.label = label;
+    try {
+      const id = "a" + Math.random().toString(36).slice(2, 10);
+      await fbdb.ref("classes/" + classId + "/assignments/" + id).set(payload);
+      overlay.remove();
+      openClassDetail(classId, document.getElementById("classDetailTitle").textContent);
+    } catch (e) { errEl.textContent = "Úkol se nepodařilo uložit."; }
+  });
+}
+async function checkClassAssignments(profile, ctx) {
+  if (!profile.classId || !currentUser) return;
+  try {
+    const snap = await fbdb.ref("classes/" + profile.classId + "/assignments").get();
+    const assignments = snap.val() || {};
+    const now = Date.now();
+    const uid = currentUser.uid;
+    for (const id of Object.keys(assignments)) {
+      const a = assignments[id];
+      if (!a || (a.deadline && a.deadline < now)) continue;
+      const prog = (a.progress && a.progress[uid]) || {};
+      if (prog.done) continue;
+      const ref = fbdb.ref("classes/" + profile.classId + "/assignments/" + id + "/progress/" + uid);
+      if (a.type === "lesson" && !ctx.isRace && ctx.lessonId === a.lessonId) {
+        if ((ctx.acc || 0) >= (a.target || 0)) ref.set({ done: true, completedAt: now }).catch(() => {});
+      } else if (a.type === "speed") {
+        if ((ctx.cpm || 0) >= (a.target || 0)) ref.set({ done: true, completedAt: now }).catch(() => {});
+      } else if (a.type === "volume") {
+        const count = (prog.count || 0) + 1;
+        if (count >= (a.target || 1)) ref.set({ done: true, count: count, completedAt: now }).catch(() => {});
+        else ref.set({ done: false, count: count }).catch(() => {});
+      }
+    }
+  } catch (e) { /* ukoly nejsou kriticke, tiche selhani */ }
 }
 document.getElementById("exportCsvBtn").addEventListener("click", () => {
   const rows = window._currentClassRows || [];
