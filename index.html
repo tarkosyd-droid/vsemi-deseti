@@ -553,6 +553,7 @@
   .levelup-overlay {
     position: fixed; inset: 0; display: flex; align-items: center; justify-content: center;
     background: rgba(6,7,12,0.6); z-index: 90; animation: fadeIn 0.2s ease; cursor: pointer;
+    padding: 16px; box-sizing: border-box;
   }
   .levelup-card {
     background: linear-gradient(160deg, #1c2030, #12151f); border: 1px solid var(--gold); border-radius: 22px;
@@ -2254,7 +2255,7 @@ function showAssignmentDialog(classId, existing) {
   const overlay = document.createElement("div");
   overlay.className = "levelup-overlay";
   const lessonOptions = LESSONS.map(l => '<option value="' + l.id + '">' + l.name + '</option>').join("");
-  overlay.innerHTML = '<div class="levelup-card form-card" style="cursor:default; max-width:360px; text-align:left;">'
+  overlay.innerHTML = '<div class="levelup-card form-card" style="cursor:default; width:100%; max-width:460px; text-align:left;">'
     + '<p class="lu-title" style="margin-bottom:14px;">' + (isEdit ? "Upravit úkol" : "Nový úkol") + '</p>'
     + '<div class="assign-form">'
     + '<div><label>Typ úkolu</label><select id="assignType">'
