@@ -1259,6 +1259,7 @@ function renderProfile(profile) {
   cachedProfile = profile;
   const nickEl = document.getElementById("authUserNick");
   if (nickEl) nickEl.textContent = profile.nickname || "Bez přezdívky";
+  if (currentScreenId !== "profile") return;
   const avatarCircle = document.getElementById("profileAvatarCircle");
   const avatarPicker = document.getElementById("profileAvatarPicker");
   if (avatarCircle && avatarPicker) {
@@ -1328,6 +1329,7 @@ function renderProfile(profile) {
   renderFriendsList(profile);
 }
 async function loadHomeProfile() {
+  if (cachedProfile) renderProfile(cachedProfile);
   const profile = await loadProfile();
   renderProfile(profile);
 }
@@ -1677,20 +1679,22 @@ async function renderFriendRequests() {
   });
 }
 async function renderFriendsList(profile) {
-  await reconcileFriendAccepts(profile);
-  await renderFriendRequests();
   const el = document.getElementById("friendsList");
   if (!el) return;
   const friends = profile.friends || {};
   const keys = Object.keys(friends);
+  const boardPromise = keys.length
+    ? fbdb.ref("board/top").once("value").catch(() => null)
+    : Promise.resolve(null);
+  await Promise.all([reconcileFriendAccepts(profile), renderFriendRequests()]);
   if (!keys.length) {
     el.innerHTML = '<div class="friends-empty">Zatím žádní přátelé — přidej je vyhledáním výše.</div>';
     return;
   }
   let scoreMap = {};
   try {
-    const snap = await fbdb.ref("board/top").get();
-    const list = snap.exists() ? snap.val() : [];
+    const snap = await boardPromise;
+    const list = snap && snap.exists() ? snap.val() : [];
     list.forEach(p => {
       const k = p.key || p.name;
       if (!scoreMap[k] || p.cpm > scoreMap[k].cpm) scoreMap[k] = p;
