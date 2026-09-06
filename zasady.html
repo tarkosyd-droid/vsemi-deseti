@@ -1,0 +1,91 @@
+<!DOCTYPE html>
+<html lang="cs">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Zásady ochrany osobních údajů — Všemi deseti</title>
+<style>
+  * { box-sizing: border-box; }
+  :root {
+    --bg0: #0a0c11; --bg1: #12151d; --line: #262c3a;
+    --accent: #6f8cff; --tx: #eef0f6; --tx2: #9aa1b4;
+  }
+  body {
+    margin: 0; font-family: 'Segoe UI', Arial, sans-serif; color: var(--tx); background: var(--bg0);
+    line-height: 1.65; padding: 40px 16px 80px;
+  }
+  .wrap { max-width: 720px; margin: 0 auto; }
+  a { color: var(--accent); }
+  h1 { font-size: 26px; margin-bottom: 4px; }
+  .updated { color: var(--tx2); font-size: 13.5px; margin-bottom: 32px; }
+  h2 { font-size: 18px; margin-top: 40px; border-bottom: 1px solid var(--line); padding-bottom: 8px; }
+  p, li { font-size: 15px; color: var(--tx2); }
+  strong { color: var(--tx); }
+  ul { padding-left: 20px; }
+  li { margin-bottom: 8px; }
+  table { width: 100%; border-collapse: collapse; margin: 16px 0; font-size: 14px; }
+  th, td { text-align: left; padding: 8px 10px; border-bottom: 1px solid var(--line); vertical-align: top; }
+  th { color: var(--tx); }
+  .back { display: inline-block; margin-bottom: 24px; color: var(--tx2); text-decoration: none; }
+  .box { background: var(--bg1); border: 1px solid var(--line); border-radius: 12px; padding: 16px 18px; margin: 20px 0; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <a class="back" href="index.html">← zpět do aplikace</a>
+  <h1>Zásady ochrany osobních údajů</h1>
+  <p class="updated">Platí od 6. září 2026</p>
+
+  <p>Tyto zásady popisují, jaké osobní údaje aplikace <strong>Všemi deseti</strong> (trenažér psaní všemi deseti) zpracovává, proč, a jaká máš práva. Aplikaci provozuje fyzická osoba, ne firma — kontakt je uvedený níže.</p>
+
+  <div class="box">
+    <strong>Správce údajů:</strong> Daniel Hübscher<br>
+    <strong>Kontakt:</strong> <a href="mailto:danielhubscher97@gmail.com">danielhubscher97@gmail.com</a>
+  </div>
+
+  <h2>Co aplikace ukládá</h2>
+  <p>Pokud aplikaci používáš <strong>bez účtu</strong>, tvůj postup (level, XP, statistiky) se ukládá jen v paměti tvého prohlížeče (localStorage) a nikam se neodesílá.</p>
+  <p>Pokud si <strong>založíš účet</strong> (e-mailem a heslem, nebo přes Google), aby se ti postup uložil natrvalo a šel používat na více zařízeních, ukládají se tyto údaje:</p>
+  <table>
+    <tr><th>Údaj</th><th>K čemu slouží</th></tr>
+    <tr><td>E-mail</td><td>přihlášení k účtu; heslo spravuje přímo Firebase Authentication (Google), aplikace ho nikdy nevidí ani neukládá</td></tr>
+    <tr><td>Přezdívka</td><td>zobrazuje se v žebříčku, závodech, u přátel a případně ve třídě</td></tr>
+    <tr><td>Profilová fotka nebo zvolená ikona</td><td>volitelné; pokud nahraješ fotku, zmenší se na malý náhled a je vidět ostatním hráčům, kterým se ukážeš (žebříček, přátelé, závod, případně spolužáci ve třídě)</td></tr>
+    <tr><td>Statistiky psaní</td><td>rychlost, přesnost, XP, úroveň, odznaky, série dní — jádro toho, jak appka funguje</td></tr>
+    <tr><td>Seznam přátel</td><td>abys mohl/a vidět výsledky lidí, které si přidáš</td></tr>
+    <tr><td>Členství ve třídě a výsledky pro učitele</td><td>pokud se přidáš do třídy kódem, učitel dané třídy vidí tvou přezdívku, průměrnou rychlost, přesnost, počet lekcí a XP; může je exportovat do souboru (CSV/PDF)</td></tr>
+    <tr><td>Záznam v žebříčku</td><td>přezdívka, fotka a nejlepší výsledek jsou veřejně viditelné komukoliv, kdo appku otevře</td></tr>
+  </table>
+
+  <h2>Právní základ zpracování</h2>
+  <p>Údaje zpracováváme na základě tvého <strong>souhlasu</strong>, který potvrzuješ při zakládání účtu. Souhlas můžeš kdykoli odvolat smazáním účtu (viz níže) — do budoucna se pak nic dalšího nezpracovává.</p>
+
+  <h2>Nezletilí uživatelé</h2>
+  <p>Aplikace je určená i dětem ve školách. Pokud je ti <strong>méně než 15 let</strong>, potřebuješ k založení účtu souhlas rodiče nebo jiného zákonného zástupce — aplikace při registraci žádá potvrzení, že tuto podmínku splňuješ. Aplikace nemá technickou možnost věk ověřit, spoléhá se na čestné potvrzení; pokud jako rodič zjistíš, že si dítě mladší 15 let založilo účet bez tvého souhlasu, napiš nám na kontaktní e-mail a účet smažeme.</p>
+
+  <h2>Kdo má k údajům přístup</h2>
+  <p>Data jsou uložená u služby <strong>Firebase</strong> (Google) — konkrétně Firebase Authentication a Firebase Realtime Database, na serverech mimo Evropskou unii (USA). Google se hlásí k rámci EU-US Data Privacy Framework, který zajišťuje odpovídající úroveň ochrany při předávání dat do USA. Aplikace dále používá Google reCAPTCHA k ochraně proti automatizovanému zneužití (zakládání falešných účtů apod.).</p>
+  <p>Žádné údaje neprodáváme ani nepředáváme reklamním sítím. Aplikace nepoužívá sledovací ani analytické cookies.</p>
+
+  <h2>Jak dlouho údaje uchováváme</h2>
+  <p>Dokud máš účet aktivní. Když si účet necháš smazat, smažeme i navázané údaje (profil, statistiky, členství ve třídě, položky v žebříčku a seznamu přátel) do 30 dnů.</p>
+
+  <h2>Tvoje práva</h2>
+  <ul>
+    <li><strong>Přístup</strong> — můžeš požádat o přehled toho, co o tobě evidujeme.</li>
+    <li><strong>Oprava</strong> — přezdívku a fotku si upravuješ přímo v appce, cokoliv dalšího na požádání.</li>
+    <li><strong>Výmaz</strong> — napiš na kontaktní e-mail níže a účet i data smažeme.</li>
+    <li><strong>Omezení nebo námitka proti zpracování</strong> — napiš nám, co konkrétně nechceš, abychom zpracovávali.</li>
+    <li><strong>Přenositelnost</strong> — na požádání ti pošleme tvá data ve strojově čitelném formátu.</li>
+    <li><strong>Stížnost u dozorového úřadu</strong> — Úřad pro ochranu osobních údajů, Pplk. Sochora 27, 170 00 Praha 7, <a href="https://www.uoou.cz" target="_blank" rel="noopener">www.uoou.cz</a>.</li>
+  </ul>
+  <p>Práva uplatníš napsáním na <a href="mailto:danielhubscher97@gmail.com">danielhubscher97@gmail.com</a>. Odpovíme nejpozději do 30 dnů.</p>
+
+  <h2>Zabezpečení</h2>
+  <p>Přenos dat probíhá šifrovaně (HTTPS). Přístup k databázi je omezený pravidly tak, aby uživatel viděl jen svoje vlastní údaje a veřejně dostupné části (žebříček, veřejný profil). Hesla spravuje výhradně Firebase Authentication.</p>
+
+  <h2>Změny těchto zásad</h2>
+  <p>Zásady můžeme čas od času upravit, například když přibude nová funkce, která pracuje s dalšími údaji. Datum poslední aktualizace je uvedené nahoře.</p>
+</div>
+</body>
+</html>

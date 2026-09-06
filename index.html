@@ -686,6 +686,7 @@
             Pokračovat přes Google
           </button>
           <p class="hint" style="margin-top:8px;">Bez účtu se postup ukládá jen v tomhle prohlížeči.</p>
+          <p class="hint" style="margin-top:6px;"><a href="zasady.html" target="_blank" rel="noopener" style="color:var(--tx2);">Zásady ochrany osobních údajů</a></p>
         </div>
         <div id="authLoggedIn" style="display:none;">
           <div class="profile-avatar-row">
@@ -1293,8 +1294,15 @@ fbauth.onAuthStateChanged(async (user) => {
     try {
       const snap = await fbdb.ref("users/" + user.uid + "/profile").get();
       if (!snap.exists()) {
+        const consented = await askAgeConsent();
+        if (!consented) {
+          await fbauth.signOut();
+          showToast("Bez potvrzení se nelze zaregistrovat.");
+          return;
+        }
         const localRaw = localStorage.getItem("profile:me");
         const migrated = localRaw ? JSON.parse(localRaw) : { xp: 0, streak: 0, lastActiveDate: null, badges: [], lessonsCompleted: 0 };
+        migrated.consentAt = Date.now();
         await fbdb.ref("users/" + user.uid + "/profile").set(migrated);
       }
       const freshSnap = await fbdb.ref("users/" + user.uid + "/profile").get();
@@ -1425,6 +1433,22 @@ function containsProfanity(text) {
   if (!norm) return false;
   ALLOWED_WORDS.forEach(w => { norm = norm.split(normalizeForFilter(w)).join(""); });
   return BANNED_WORDS.some(w => norm.includes(normalizeForFilter(w)));
+}
+function askAgeConsent() {
+  return new Promise((resolve) => {
+    const overlay = document.createElement("div");
+    overlay.className = "levelup-overlay";
+    overlay.innerHTML = '<div class="levelup-card" style="cursor:default; max-width:360px;">'
+      + '<div class="lu-icon">🔒</div>'
+      + '<p class="lu-title">Než začneš</p>'
+      + '<p class="lu-sub" style="margin-bottom:16px; text-align:left; line-height:1.5;">Je ti 15 let nebo více, nebo ti se založením účtu a se zpracováním tvých údajů souhlasí rodič či zákonný zástupce? Přečti si <a href="zasady.html" target="_blank" rel="noopener" style="color:var(--accent);">zásady ochrany osobních údajů</a>.</p>'
+      + '<button class="btn-primary" id="ageConsentYes" style="margin-bottom:8px;">Ano, souhlasím</button>'
+      + '<button class="btn-secondary" id="ageConsentNo" style="margin-bottom:0;">Ne</button>'
+      + '</div>';
+    document.body.appendChild(overlay);
+    overlay.querySelector("#ageConsentYes").addEventListener("click", () => { overlay.remove(); resolve(true); });
+    overlay.querySelector("#ageConsentNo").addEventListener("click", () => { overlay.remove(); resolve(false); });
+  });
 }
 function askNickname() {
   return new Promise((resolve) => {
