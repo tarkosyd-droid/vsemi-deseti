@@ -284,7 +284,28 @@
   .roster-table { width: 100%; border-collapse: collapse; font-size: 13px; }
   .roster-table th { text-align: left; color: var(--tx2); font-weight: 600; padding: 8px 10px; border-bottom: 1px solid var(--line); }
   .roster-table td { padding: 8px 10px; border-bottom: 1px solid var(--line); }
+  .roster-table th:not(:first-child), .roster-table td:not(:first-child) { text-align: right; }
   .roster-table tr:hover td { background: rgba(111,140,255,0.06); }
+  .class-head { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-top: 14px; flex-wrap: wrap; }
+  .class-title { font-size: 20px; margin: 0; color: var(--tx); }
+  .class-code-badge {
+    font-family: 'JetBrains Mono', monospace; font-size: 15px; letter-spacing: 2px; font-weight: 700;
+    background: rgba(111,140,255,0.12); color: var(--accent); border: 1px solid rgba(111,140,255,0.35);
+    border-radius: 10px; padding: 8px 14px;
+  }
+  .class-code-badge:hover { background: rgba(111,140,255,0.2); }
+  .class-actions { display: flex; align-items: center; justify-content: flex-end; gap: 8px; margin: 14px 0; flex-wrap: wrap; }
+  .btn-compact { width: auto; padding: 11px 18px; margin-bottom: 0; }
+  .btn-ghost {
+    width: auto; margin-bottom: 0; padding: 11px 14px; font-size: 13.5px;
+    background: transparent; border: 1px solid var(--line); color: var(--tx2);
+  }
+  .btn-ghost:hover { background: #1c2030; color: var(--tx); }
+  .btn-icon-danger {
+    width: auto; margin-bottom: 0; margin-left: 6px; padding: 11px 13px;
+    background: transparent; border: 1px solid transparent; color: var(--tx2);
+  }
+  .btn-icon-danger:hover { background: rgba(255,107,125,0.12); color: var(--bad); border-color: rgba(255,107,125,0.35); }
   .friend-card {
     display: flex; align-items: center; gap: 12px; background: #12151f; border: 1px solid var(--line);
     border-radius: 12px; padding: 10px 12px;
@@ -753,13 +774,18 @@
 
   <div id="screen-class-detail" class="card" style="display:none;">
     <span class="backlink" data-back="school">← zpět na Škola / Firma</span>
-    <p class="lb-title" id="classDetailTitle" style="margin-top:14px;">Třída</p>
-    <p class="hint" id="classDetailCode"></p>
-    <div style="display:flex; gap:8px; margin:12px 0;">
-      <button class="btn-primary" id="startClassRaceBtn" style="margin-bottom:0; width:auto;">Spustit závod pro třídu</button>
-      <button class="btn-secondary" id="exportCsvBtn" style="margin-bottom:0;">Export CSV</button>
-      <button class="btn-secondary" id="exportPdfBtn" style="margin-bottom:0;">Export PDF</button>
-      <button class="btn-danger" id="deleteClassBtn" style="margin-bottom:0;">Smazat třídu</button>
+    <div class="class-head">
+      <div>
+        <h2 class="class-title" id="classDetailTitle">Třída</h2>
+        <p class="hint" id="classDetailCount" style="margin:2px 0 0;"></p>
+      </div>
+      <button class="class-code-badge" id="classDetailCode" title="Klikni a zkopíruj kód" style="display:none;"></button>
+    </div>
+    <div class="class-actions" id="classActionsBar">
+      <button class="btn-primary btn-compact" id="startClassRaceBtn">Spustit závod pro třídu</button>
+      <button class="btn-ghost" id="exportCsvBtn">Export CSV</button>
+      <button class="btn-ghost" id="exportPdfBtn">Export PDF</button>
+      <button class="btn-icon-danger" id="deleteClassBtn" title="Smazat třídu">🗑</button>
     </div>
     <div id="classRosterTable"></div>
   </div>
@@ -2028,24 +2054,32 @@ document.getElementById("joinClassBtn").addEventListener("click", async () => {
 });
 let currentClassDetailId = null;
 let currentClassInviteCode = null;
+function pluralZaci(n) {
+  if (n === 1) return n + " žák";
+  if (n >= 2 && n <= 4) return n + " žáci";
+  return n + " žáků";
+}
 async function openClassDetail(classId, className) {
   currentClassDetailId = classId;
   currentClassInviteCode = null;
   document.getElementById("classDetailTitle").textContent = className;
-  document.getElementById("classDetailCode").textContent = "Načítám…";
+  document.getElementById("classDetailCount").textContent = "Načítám…";
+  document.getElementById("classDetailCode").style.display = "none";
   show("class-detail");
   try {
     const snap = await fbdb.ref("classes/" + classId).get();
     const data = snap.val() || {};
     const isOwner = !!(currentUser && data.ownerUid === currentUser.uid);
     currentClassInviteCode = data.inviteCode || null;
-    document.getElementById("classDetailCode").textContent = isOwner ? "Kód pro žáky: " + (data.inviteCode || "—") : "";
-    document.getElementById("startClassRaceBtn").style.display = isOwner ? "" : "none";
-    document.getElementById("exportCsvBtn").style.display = isOwner ? "" : "none";
-    document.getElementById("exportPdfBtn").style.display = isOwner ? "" : "none";
-    document.getElementById("deleteClassBtn").style.display = isOwner ? "" : "none";
+    document.getElementById("classActionsBar").style.display = isOwner ? "" : "none";
+    if (isOwner) {
+      const codeEl = document.getElementById("classDetailCode");
+      codeEl.textContent = data.inviteCode || "—";
+      codeEl.style.display = "";
+    }
     const members = data.members || {};
     const rows = Object.values(members).sort((a, b) => (b.xp || 0) - (a.xp || 0));
+    document.getElementById("classDetailCount").textContent = pluralZaci(rows.length);
     const tableEl = document.getElementById("classRosterTable");
     if (!rows.length) {
       tableEl.innerHTML = '<p class="hint">Zatím se nikdo nepřidal — pošli žákům kód výše.</p>';
@@ -2059,9 +2093,14 @@ async function openClassDetail(classId, className) {
     }
     window._currentClassRows = rows;
   } catch (e) {
-    document.getElementById("classDetailCode").textContent = "Nepodařilo se načíst data třídy.";
+    document.getElementById("classDetailCount").textContent = "Nepodařilo se načíst data třídy.";
   }
 }
+document.getElementById("classDetailCode").addEventListener("click", async () => {
+  if (!currentClassInviteCode) return;
+  try { await navigator.clipboard.writeText(currentClassInviteCode); showToast("Kód zkopírován"); }
+  catch (e) { showToast("Kód: " + currentClassInviteCode); }
+});
 document.getElementById("exportCsvBtn").addEventListener("click", () => {
   const rows = window._currentClassRows || [];
   let csv = "Jméno;Ø zn/min;Ø přesnost;Lekcí;XP\n";
