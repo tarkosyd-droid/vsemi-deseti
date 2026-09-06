@@ -297,7 +297,11 @@
   }
   .class-code-badge:hover { background: rgba(111,140,255,0.2); }
   .class-actions { display: flex; align-items: center; justify-content: flex-end; gap: 8px; margin: 14px 0; flex-wrap: wrap; }
-  .btn-compact { width: auto; padding: 11px 18px; margin-bottom: 0; }
+  .class-actions button, .class-actions select {
+    height: 40px; border-radius: 8px; box-sizing: border-box; padding-top: 0; padding-bottom: 0;
+  }
+  .class-actions button { display: inline-flex; align-items: center; justify-content: center; }
+  .btn-compact { width: auto; padding-left: 18px; padding-right: 18px; margin-bottom: 0; }
   .btn-ghost {
     width: auto; margin-bottom: 0; padding: 11px 14px; font-size: 13.5px;
     background: transparent; border: 1px solid var(--line); color: var(--tx2);
@@ -310,20 +314,41 @@
   .btn-icon-danger:hover { background: rgba(255,107,125,0.12); color: var(--bad); border-color: rgba(255,107,125,0.35); }
   .race-text-select {
     font-family: 'Inter', sans-serif; font-size: 13px; color: var(--tx2); background: #1c2030;
-    border: 1px solid var(--line); border-radius: 12px; padding: 11px 10px; max-width: 160px;
+    border: 1px solid var(--line); padding-left: 10px; padding-right: 10px; max-width: 160px;
   }
-  .class-text-add { display: flex; gap: 8px; align-items: flex-start; margin-bottom: 10px; }
+  .text-add-toggle { width: auto; margin-bottom: 12px; }
+  .class-text-add { display: flex; gap: 8px; align-items: flex-start; margin-bottom: 14px; animation: fadeIn 0.2s ease; }
   .class-text-add textarea {
     flex: 1; min-height: 60px; resize: vertical; font-family: inherit; font-size: 14px;
     padding: 12px 14px; border-radius: 10px; border: 1px solid var(--line); background: #0e1017; color: var(--tx);
   }
+  .texts-empty {
+    display: flex; flex-direction: column; align-items: center; text-align: center;
+    padding: 26px 16px; color: var(--tx2); background: #12151f; border: 1px dashed var(--line); border-radius: 14px;
+  }
+  .texts-empty .te-icon { opacity: 0.5; margin-bottom: 10px; }
+  .texts-empty p { margin: 0; font-size: 13.5px; line-height: 1.5; }
   .assign-status { font-size: 12.5px; font-weight: 700; padding: 4px 10px; border-radius: 8px; }
   .assign-status.done { background: rgba(78,224,138,0.16); color: var(--good); }
   .assign-status.active { background: rgba(111,140,255,0.16); color: var(--accent); }
   .assign-status.missed { background: rgba(255,107,125,0.14); color: var(--bad); }
   .assign-form { display: flex; flex-direction: column; gap: 10px; text-align: left; }
-  .assign-form select, .assign-form input { margin-bottom: 0; }
   .assign-form label { font-size: 12.5px; color: var(--tx2); font-weight: 600; }
+  .assign-form select, .assign-form input {
+    width: 100%; box-sizing: border-box; font-family: 'Inter', sans-serif; font-size: 15px;
+    padding: 11px 14px; border-radius: 10px; margin-bottom: 0;
+    border: 1px solid var(--line); background: #0f1015; color: var(--tx); outline: none;
+    transition: border-color 0.15s, box-shadow 0.15s;
+  }
+  .assign-form select:focus, .assign-form input:focus { border-color: var(--accent); box-shadow: 0 0 0 3px rgba(111,140,255,0.18); }
+  .assign-form select {
+    appearance: none; -webkit-appearance: none; padding-right: 34px;
+    background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='10' height='6'><path d='M0 0l5 6 5-6z' fill='%238a8fa3'/></svg>");
+    background-repeat: no-repeat; background-position: right 14px center;
+  }
+  .assign-form select option { background: #12151f; color: var(--tx); }
+  .assign-form input[type=datetime-local] { color-scheme: dark; }
+  .assign-form input[type=datetime-local]::-webkit-calendar-picker-indicator { filter: invert(0.75); cursor: pointer; }
   .friend-card {
     display: flex; align-items: center; gap: 12px; background: #12151f; border: 1px solid var(--line);
     border-radius: 12px; padding: 10px 12px;
@@ -543,6 +568,12 @@
     -webkit-background-clip: text; background-clip: text; color: transparent;
   }
   .levelup-card .lu-sub { color: var(--tx2); font-size: 14px; margin: 0; }
+  .levelup-card.form-card {
+    border-color: var(--line); box-shadow: 0 24px 60px -20px rgba(0,0,0,0.55);
+  }
+  .levelup-card.form-card .lu-title {
+    background: none; -webkit-background-clip: initial; background-clip: initial; color: var(--tx);
+  }
   @keyframes popIn { 0% { transform: scale(0.7); opacity: 0; } 70% { transform: scale(1.06); } 100% { transform: scale(1); opacity: 1; } }
   .profile-view-card {
     background: #14171f; border: 1px solid rgba(255,255,255,0.09); border-radius: 18px;
@@ -2158,10 +2189,12 @@ function renderClassTexts(classId, isOwner, customTexts) {
   const box = document.getElementById("classTextsBox");
   let html = '<p class="lb-title" style="margin-bottom:8px;">' + svgIcon("scroll", 18) + ' Vlastní texty</p>';
   if (isOwner) {
-    html += '<div class="class-text-add"><div style="flex:1;"><input type="text" id="classTextNameInput" placeholder="Název (nepovinné, např. Jarní slovíčka)" style="margin-bottom:8px;"><textarea id="classTextInput" placeholder="Napiš vlastní text k procvičení pro svoji třídu…"></textarea></div><button class="btn-ghost" id="addClassTextBtn" style="align-self:flex-start;">Přidat</button></div>';
+    html += '<button class="btn-ghost text-add-toggle" id="toggleClassTextFormBtn">+ Přidat vlastní text</button>'
+      + '<div class="class-text-add" id="classTextAddForm" style="display:none;"><div style="flex:1;"><input type="text" id="classTextNameInput" placeholder="Název (nepovinné, např. Jarní slovíčka)" style="margin-bottom:8px;"><textarea id="classTextInput" placeholder="Napiš vlastní text k procvičení pro svoji třídu…"></textarea></div><button class="btn-ghost" id="addClassTextBtn" style="align-self:flex-start;">Přidat</button></div>';
   }
   if (!list.length) {
-    html += '<p class="hint">' + (isOwner ? "Zatím žádné vlastní texty — přidej první výše." : "Učitel zatím nepřidal žádný vlastní text.") + '</p>';
+    html += '<div class="texts-empty"><div class="te-icon">' + svgIcon("scroll", 30) + '</div><p>'
+      + (isOwner ? "Zatím žádné vlastní texty. Přidej první tlačítkem výše." : "Učitel zatím nepřidal žádný vlastní text.") + '</p></div>';
   } else {
     html += '<div class="lesson-list">' + list.map((t, i) =>
       '<div class="lesson-row" data-tidx="' + i + '"><span class="name">' + textLabel(t, i, isOwner) + '</span>' +
@@ -2171,6 +2204,13 @@ function renderClassTexts(classId, isOwner, customTexts) {
   }
   box.innerHTML = html;
   if (isOwner) {
+    const toggleBtn = document.getElementById("toggleClassTextFormBtn");
+    const formBox = document.getElementById("classTextAddForm");
+    toggleBtn.addEventListener("click", () => {
+      const isOpen = formBox.style.display !== "none";
+      formBox.style.display = isOpen ? "none" : "flex";
+      toggleBtn.textContent = isOpen ? "+ Přidat vlastní text" : "− Skrýt formulář";
+    });
     document.getElementById("addClassTextBtn").addEventListener("click", async () => {
       const nameEl = document.getElementById("classTextNameInput");
       const ta = document.getElementById("classTextInput");
@@ -2255,7 +2295,7 @@ function showNewAssignmentDialog(classId) {
   const overlay = document.createElement("div");
   overlay.className = "levelup-overlay";
   const lessonOptions = LESSONS.map(l => '<option value="' + l.id + '">' + l.name + '</option>').join("");
-  overlay.innerHTML = '<div class="levelup-card" style="cursor:default; max-width:360px; text-align:left;">'
+  overlay.innerHTML = '<div class="levelup-card form-card" style="cursor:default; max-width:360px; text-align:left;">'
     + '<p class="lu-title" style="margin-bottom:14px;">Nový úkol</p>'
     + '<div class="assign-form">'
     + '<div><label>Typ úkolu</label><select id="assignType">'
