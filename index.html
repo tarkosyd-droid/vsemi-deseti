@@ -965,17 +965,73 @@ const RACE_TEXTS = [
   "Programátorka celou noc ladila kód, než konečně aplikace fungovala bez jediné chyby.",
 ];
 
+/* ---------- fond textu pro Volny text (zacina jako kopie zavodnich vet) ---------- */
+const FREE_TEXTS = RACE_TEXTS.slice();
+
+/* ---------- michaci sacek: kazda veta se objevi jednou, nez se sada zopakuje ---------- */
+const _textBags = {};
+const _lastServed = {};
+function pickFromPool(key, pool) {
+  if (!pool || !pool.length) return "";
+  if (pool.length === 1) return pool[0];
+  let bag = _textBags[key];
+  if (!bag || !bag.length || bag.poolLen !== pool.length) {
+    const arr = pool.slice();
+    for (let i = arr.length - 1; i > 0; i--) {
+      const j = Math.floor(Math.random() * (i + 1));
+      const t = arr[i]; arr[i] = arr[j]; arr[j] = t;
+    }
+    // aby hned po zamichani nepadla stejna veta jako naposledy
+    if (arr.length > 1 && arr[arr.length - 1] === _lastServed[key]) {
+      const t = arr[arr.length - 1]; arr[arr.length - 1] = arr[0]; arr[0] = t;
+    }
+    bag = arr; bag.poolLen = pool.length; _textBags[key] = bag;
+  }
+  const out = bag.pop();
+  _lastServed[key] = out;
+  return out;
+}
+
+/* ---------- dotazeni vet ze souboru texty.json ---------- */
+/* Kdyz se soubor nestahne, appka jede dal na vetach zapsanych vyse. */
+function applyExtraTexts(data) {
+  if (!data || typeof data !== "object") return;
+  if (Array.isArray(data.free)) {
+    data.free.forEach(t => { if (typeof t === "string" && t.trim()) FREE_TEXTS.push(t.trim()); });
+  }
+  if (Array.isArray(data.long)) {
+    const lesson = LESSONS.find(l => l.id === "long");
+    if (lesson && lesson.texts) {
+      data.long.forEach(t => { if (typeof t === "string" && t.trim()) lesson.texts.push(t.trim()); });
+    }
+  }
+  // sacky vyprazdnit, at se nove vety zapoji hned
+  Object.keys(_textBags).forEach(k => delete _textBags[k]);
+  try {
+    const list = document.getElementById("lessonList");
+    if (list && list.children.length) renderLessonList();
+  } catch (e) {}
+}
+(function loadExtraTexts() {
+  try {
+    fetch("texty.json", { cache: "default" })
+      .then(r => r.ok ? r.json() : null)
+      .then(applyExtraTexts)
+      .catch(() => {});
+  } catch (e) {}
+})();
+
 function computeCpm(chars, ms) {
   const minutes = ms / 60000;
   if (minutes <= 0) return 0;
   return Math.round(chars / minutes);
 }
 function randomFreeText() {
-  return RACE_TEXTS[Math.floor(Math.random() * RACE_TEXTS.length)];
+  return pickFromPool("free", FREE_TEXTS);
 }
 function pickLessonText(lesson) {
   if (lesson.id === "free" || !lesson.texts) return randomFreeText();
-  return lesson.texts[Math.floor(Math.random() * lesson.texts.length)];
+  return pickFromPool("lesson:" + lesson.id, lesson.texts);
 }
 function computeAcc(correct, total) {
   if (total <= 0) return 100;
@@ -2272,9 +2328,9 @@ function renderLessonList() {
   LESSONS.forEach(l => {
     const row = document.createElement("div");
     row.className = "lesson-row";
-    const pool = l.texts || RACE_TEXTS;
+    const pool = l.texts || FREE_TEXTS;
     const avgLen = Math.round(pool.reduce((s, t) => s + t.length, 0) / pool.length);
-    const meta = "pokaždé jiná věta · ~" + avgLen + " znaků";
+    const meta = pool.length + " textů · ~" + avgLen + " znaků";
     row.innerHTML = '<span class="name">' + l.name + '</span><span class="best">' + meta + '</span>';
     row.addEventListener("click", () => startSolo(l, pickLessonText(l)));
     el.appendChild(row);
