@@ -334,13 +334,14 @@
   .assign-status.missed { background: rgba(255,107,125,0.14); color: var(--bad); }
   .assign-form { display: flex; flex-direction: column; gap: 10px; text-align: left; }
   .assign-form label { font-size: 12.5px; color: var(--tx2); font-weight: 600; }
-  .assign-form select, .assign-form input {
+  .assign-form select, .assign-form input, .assign-form textarea {
     width: 100%; box-sizing: border-box; font-family: 'Inter', sans-serif; font-size: 15px;
     padding: 11px 14px; border-radius: 10px; margin-bottom: 0;
     border: 1px solid var(--line); background: #0f1015; color: var(--tx); outline: none;
     transition: border-color 0.15s, box-shadow 0.15s;
   }
-  .assign-form select:focus, .assign-form input:focus { border-color: var(--accent); box-shadow: 0 0 0 3px rgba(111,140,255,0.18); }
+  .assign-form textarea { min-height: 80px; resize: vertical; font-family: inherit; }
+  .assign-form select:focus, .assign-form input:focus, .assign-form textarea:focus { border-color: var(--accent); box-shadow: 0 0 0 3px rgba(111,140,255,0.18); }
   .assign-form select {
     appearance: none; -webkit-appearance: none; padding-right: 34px;
     background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='10' height='6'><path d='M0 0l5 6 5-6z' fill='%238a8fa3'/></svg>");
@@ -837,7 +838,6 @@
       <button class="btn-ghost" id="exportPdfBtn">Export PDF</button>
       <button class="btn-icon-danger" id="deleteClassBtn" title="Smazat třídu">🗑</button>
     </div>
-    <div id="classTextsBox" style="margin:18px 0;"></div>
     <div id="classAssignmentsBox" style="margin:18px 0;"></div>
     <div id="classRosterTable"></div>
   </div>
@@ -1613,19 +1613,6 @@ function showPublicProfile(p) {
   document.body.appendChild(overlay);
   overlay.addEventListener("click", () => overlay.remove());
 }
-async function showTextResults(classId, textId, label) {
-  const overlay = document.createElement("div");
-  overlay.className = "levelup-overlay";
-  overlay.innerHTML = '<div class="levelup-card" style="cursor:default; max-width:360px; text-align:left;"><p class="lu-title" style="margin-bottom:12px;">' + label + '</p><p class="hint">Načítám…</p></div>';
-  document.body.appendChild(overlay);
-  overlay.addEventListener("click", (e) => { if (e.target === overlay) overlay.remove(); });
-  const snap = await fbdb.ref("classes/" + classId + "/customTexts/" + textId + "/results").get();
-  const rows = Object.values(snap.val() || {}).sort((a, b) => (b.cpm || 0) - (a.cpm || 0));
-  const body = rows.length
-    ? '<div class="lesson-list">' + rows.map(r => '<div class="lesson-row static-row"><span class="name">' + (r.name || "Žák") + '</span><span class="best">' + Math.round(r.cpm || 0) + ' zn/min · ' + Math.round(r.acc || 0) + '%</span></div>').join("") + '</div>'
-    : '<p class="hint">Zatím to nikdo z žáků nezkusil.</p>';
-  overlay.querySelector(".levelup-card").innerHTML = '<p class="lu-title" style="margin-bottom:12px;">' + label + '</p>' + body;
-}
 function showConfirm(title, message) {
   return new Promise((resolve) => {
     const overlay = document.createElement("div");
@@ -2143,7 +2130,7 @@ async function openClassDetail(classId, className) {
       codeEl.textContent = data.inviteCode || "—";
       codeEl.style.display = "";
     }
-    renderClassTexts(classId, isOwner, data.customTexts || {});
+    updateClassRaceSelect(isOwner, data.assignments || {});
     const members = data.members || {};
     const rows = Object.values(members).sort((a, b) => (b.xp || 0) - (a.xp || 0));
     renderClassAssignments(classId, isOwner, data.assignments || {}, Object.keys(members).length);
@@ -2170,12 +2157,10 @@ document.getElementById("classDetailCode").addEventListener("click", async () =>
   catch (e) { showToast("Kód: " + currentClassInviteCode); }
 });
 function textPreview(t) { return t.length > 60 ? t.slice(0, 60) + "…" : t; }
-function textLabel(t, i, isOwner) {
-  if (t.label) return t.label;
-  return isOwner ? textPreview(t.text) : "Text od učitele " + (i + 1);
-}
-function renderClassTexts(classId, isOwner, customTexts) {
-  const list = Object.keys(customTexts).map(id => Object.assign({ id: id }, customTexts[id]))
+function updateClassRaceSelect(isOwner, assignments) {
+  const list = Object.keys(assignments)
+    .map(id => Object.assign({ id: id }, assignments[id]))
+    .filter(a => a.type === "text")
     .sort((a, b) => (a.createdAt || 0) - (b.createdAt || 0));
   window._currentClassTexts = list;
   const sel = document.getElementById("classRaceTextSelect");
@@ -2186,88 +2171,12 @@ function renderClassTexts(classId, isOwner, customTexts) {
     sel.innerHTML = "";
     sel.style.display = "none";
   }
-  const box = document.getElementById("classTextsBox");
-  let html = '<p class="lb-title" style="margin-bottom:8px;">' + svgIcon("scroll", 18) + ' Vlastní texty</p>';
-  if (isOwner) {
-    html += '<button class="btn-ghost text-add-toggle" id="toggleClassTextFormBtn">+ Přidat vlastní text</button>'
-      + '<div class="class-text-add" id="classTextAddForm" style="display:none;"><div style="flex:1;">'
-      + '<textarea id="classTextInput" placeholder="Napiš vlastní text k procvičení pro svoji třídu…"></textarea>'
-      + '<div id="classTextNameStep" style="display:none; margin-top:8px;">'
-      + '<input type="text" id="classTextNameInput" placeholder="Název (nepovinné, např. Jarní slovíčka)" style="margin-bottom:6px;">'
-      + '<span class="hint" id="classTextBackLink" style="cursor:pointer; text-decoration:underline;">‹ zpět k textu</span>'
-      + '</div></div><button class="btn-ghost" id="addClassTextBtn" style="align-self:flex-start;">Přidat</button></div>';
-  }
-  if (!list.length) {
-    html += '<div class="texts-empty"><div class="te-icon">' + svgIcon("scroll", 30) + '</div><p>'
-      + (isOwner ? "Zatím žádné vlastní texty. Přidej první tlačítkem výše." : "Učitel zatím nepřidal žádný vlastní text.") + '</p></div>';
-  } else {
-    html += '<div class="lesson-list">' + list.map((t, i) =>
-      '<div class="lesson-row" data-tidx="' + i + '"><span class="name">' + textLabel(t, i, isOwner) + '</span>' +
-      (isOwner ? '<span class="best">Výsledky →</span><span class="friend-remove" data-del="' + t.id + '" title="Smazat text">✕</span>' : '<span class="best">Procvičit →</span>') +
-      '</div>'
-    ).join("") + '</div>';
-  }
-  box.innerHTML = html;
-  if (isOwner) {
-    const toggleBtn = document.getElementById("toggleClassTextFormBtn");
-    const formBox = document.getElementById("classTextAddForm");
-    toggleBtn.addEventListener("click", () => {
-      const isOpen = formBox.style.display !== "none";
-      formBox.style.display = isOpen ? "none" : "flex";
-      toggleBtn.textContent = isOpen ? "+ Přidat vlastní text" : "− Skrýt formulář";
-    });
-    const ta = document.getElementById("classTextInput");
-    const nameStep = document.getElementById("classTextNameStep");
-    const nameEl = document.getElementById("classTextNameInput");
-    const addBtn = document.getElementById("addClassTextBtn");
-    document.getElementById("classTextBackLink").addEventListener("click", () => {
-      nameStep.style.display = "none";
-      addBtn.textContent = "Přidat";
-      ta.focus();
-    });
-    addBtn.addEventListener("click", async () => {
-      const val = ta.value.trim();
-      if (nameStep.style.display === "none") {
-        if (!val) return;
-        if (val.length > 2000) { showToast("Text je moc dlouhý (max 2000 znaků)."); return; }
-        nameStep.style.display = "";
-        addBtn.textContent = "Uložit";
-        nameEl.focus();
-        return;
-      }
-      const nameVal = nameEl.value.trim();
-      if (!val) return;
-      if (nameVal.length > 60) { showToast("Název je moc dlouhý (max 60 znaků)."); return; }
-      try {
-        const id = "t" + Math.random().toString(36).slice(2, 10);
-        const payload = { text: val, createdAt: Date.now() };
-        if (nameVal) payload.label = nameVal;
-        await fbdb.ref("classes/" + classId + "/customTexts/" + id).set(payload);
-        openClassDetail(classId, document.getElementById("classDetailTitle").textContent);
-      } catch (e) { showToast("Text se nepodařilo uložit."); }
-    });
-    nameEl.addEventListener("keydown", (e) => { if (e.key === "Enter") { e.preventDefault(); addBtn.click(); } });
-  }
-  box.querySelectorAll(".lesson-row").forEach((row, i) => {
-    const item = list[parseInt(row.dataset.tidx, 10)];
-    row.addEventListener("click", (e) => {
-      if (e.target.dataset.del) return;
-      if (isOwner) { showTextResults(classId, item.id, textLabel(item, i, true)); return; }
-      startSolo({ id: "custom_" + item.id, name: textLabel(item, i, false), texts: [item.text], classId: classId, customTextId: item.id });
-    });
-  });
-  box.querySelectorAll("[data-del]").forEach(btn => {
-    btn.addEventListener("click", async (e) => {
-      e.stopPropagation();
-      try { await fbdb.ref("classes/" + classId + "/customTexts/" + btn.dataset.del).remove(); } catch (err) {}
-      openClassDetail(classId, document.getElementById("classDetailTitle").textContent);
-    });
-  });
 }
 const ASSIGNMENT_TYPES = {
   lesson: { name: "Zvládnutí lekce", unit: "% přesnost" },
   speed:  { name: "Rychlostní výzva", unit: "zn/min" },
-  volume: { name: "Objemový trénink", unit: "lekcí" }
+  volume: { name: "Objemový trénink", unit: "lekcí" },
+  text:   { name: "Vlastní text", unit: null }
 };
 function assignmentDesc(a) {
   const t = ASSIGNMENT_TYPES[a.type];
@@ -2277,6 +2186,7 @@ function assignmentDesc(a) {
     return "Dokonči „" + (l ? l.name : a.lessonId) + "“ s přesností aspoň " + a.target + "%";
   }
   if (a.type === "speed") return "Dosáhni rychlosti aspoň " + a.target + " zn/min";
+  if (a.type === "text") return "Napiš zadaný text od učitele";
   return "Odcvič aspoň " + a.target + " lekcí";
 }
 function assignmentStatus(a, uid) {
@@ -2300,64 +2210,113 @@ function renderClassAssignments(classId, isOwner, assignments, memberCount) {
   } else {
     html += '<div class="lesson-list">' + list.map((a, i) => {
       const doneCount = Object.values(a.progress || {}).filter(p => p && p.done).length;
+      const studentClickable = !isOwner && a.type === "text";
       const rightSide = isOwner
-        ? '<span class="best">' + doneCount + '/' + memberCount + ' splnilo</span>'
-        : (() => { const s = assignmentStatus(a, currentUser && currentUser.uid); return '<span class="assign-status ' + s.cls + '">' + s.text + '</span>'; })();
-      return '<div class="lesson-row static-row" data-aidx="' + i + '"><span class="name">' + (a.label || ASSIGNMENT_TYPES[a.type].name) + '<br><span class="hint" style="font-size:12px;">' + assignmentDesc(a) + ' · do ' + formatDeadline(a.deadline) + '</span></span>' + rightSide + '</div>';
+        ? '<span class="best">' + doneCount + '/' + memberCount + ' splnilo</span><span class="friend-remove" data-del="' + a.id + '" title="Smazat úkol">✕</span>'
+        : (() => { const s = assignmentStatus(a, currentUser && currentUser.uid); return '<span class="assign-status ' + s.cls + '">' + s.text + '</span>' + (studentClickable ? '<span class="best">Procvičit →</span>' : ''); })();
+      const rowCls = (isOwner || studentClickable) ? "lesson-row" : "lesson-row static-row";
+      return '<div class="' + rowCls + '" data-aidx="' + i + '"><span class="name">' + (a.label || ASSIGNMENT_TYPES[a.type].name) + '<br><span class="hint" style="font-size:12px;">' + assignmentDesc(a) + ' · do ' + formatDeadline(a.deadline) + '</span></span>' + rightSide + '</div>';
     }).join("") + '</div>';
   }
   box.innerHTML = html;
   if (isOwner) {
-    document.getElementById("newAssignmentBtn").addEventListener("click", () => showNewAssignmentDialog(classId));
+    document.getElementById("newAssignmentBtn").addEventListener("click", () => showAssignmentDialog(classId));
+    box.querySelectorAll(".lesson-row").forEach(row => {
+      const item = list[parseInt(row.dataset.aidx, 10)];
+      row.addEventListener("click", (e) => {
+        if (e.target.dataset.del) return;
+        showAssignmentDialog(classId, item);
+      });
+    });
+    box.querySelectorAll("[data-del]").forEach(btn => {
+      btn.addEventListener("click", async (e) => {
+        e.stopPropagation();
+        try { await fbdb.ref("classes/" + classId + "/assignments/" + btn.dataset.del).remove(); } catch (err) {}
+        openClassDetail(classId, document.getElementById("classDetailTitle").textContent);
+      });
+    });
+  } else {
+    box.querySelectorAll(".lesson-row:not(.static-row)").forEach(row => {
+      const item = list[parseInt(row.dataset.aidx, 10)];
+      row.addEventListener("click", () => {
+        startSolo({ id: "assigntext_" + item.id, name: item.label || "Text od učitele", texts: [item.text], classId: classId, assignmentId: item.id });
+      });
+    });
   }
 }
-function showNewAssignmentDialog(classId) {
+function showAssignmentDialog(classId, existing) {
+  const isEdit = !!existing;
   const overlay = document.createElement("div");
   overlay.className = "levelup-overlay";
   const lessonOptions = LESSONS.map(l => '<option value="' + l.id + '">' + l.name + '</option>').join("");
   overlay.innerHTML = '<div class="levelup-card form-card" style="cursor:default; max-width:360px; text-align:left;">'
-    + '<p class="lu-title" style="margin-bottom:14px;">Nový úkol</p>'
+    + '<p class="lu-title" style="margin-bottom:14px;">' + (isEdit ? "Upravit úkol" : "Nový úkol") + '</p>'
     + '<div class="assign-form">'
     + '<div><label>Typ úkolu</label><select id="assignType">'
     + '<option value="lesson">Zvládnutí lekce</option>'
     + '<option value="speed">Rychlostní výzva</option>'
     + '<option value="volume">Objemový trénink</option>'
+    + '<option value="text">Vlastní text</option>'
     + '</select></div>'
     + '<div id="assignLessonRow"><label>Lekce</label><select id="assignLessonId">' + lessonOptions + '</select></div>'
-    + '<div><label id="assignTargetLabel">Cílová přesnost (%)</label><input type="number" id="assignTarget" min="1" placeholder="např. 95"></div>'
+    + '<div id="assignTargetRow"><label id="assignTargetLabel">Cílová přesnost (%)</label><input type="number" id="assignTarget" min="1" placeholder="např. 95"></div>'
+    + '<div id="assignTextRow" style="display:none;"><label>Text k procvičení</label><textarea id="assignTextContent" placeholder="Napiš text, který mají žáci procvičit…"></textarea></div>'
     + '<div><label>Název úkolu (nepovinné)</label><input type="text" id="assignLabel" placeholder="např. Týdenní úkol"></div>'
     + '<div><label>Deadline</label><input type="datetime-local" id="assignDeadline"></div>'
     + '<p class="err" id="assignErr" style="min-height:0;"></p>'
     + '<div style="display:flex; gap:10px; margin-top:4px;">'
     + '<button class="btn-secondary" id="assignCancelBtn" style="margin-bottom:0;">Zrušit</button>'
-    + '<button class="btn-primary" id="assignCreateBtn" style="margin-bottom:0;">Vytvořit</button>'
+    + '<button class="btn-primary" id="assignCreateBtn" style="margin-bottom:0;">' + (isEdit ? "Uložit" : "Vytvořit") + '</button>'
     + '</div></div></div>';
   document.body.appendChild(overlay);
   const typeSel = overlay.querySelector("#assignType");
   const lessonRow = overlay.querySelector("#assignLessonRow");
+  const targetRow = overlay.querySelector("#assignTargetRow");
+  const textRow = overlay.querySelector("#assignTextRow");
   const targetLabel = overlay.querySelector("#assignTargetLabel");
   function syncFields() {
-    lessonRow.style.display = typeSel.value === "lesson" ? "" : "none";
-    targetLabel.textContent = typeSel.value === "lesson" ? "Cílová přesnost (%)" : typeSel.value === "speed" ? "Cílová rychlost (zn/min)" : "Počet lekcí";
+    const t = typeSel.value;
+    lessonRow.style.display = t === "lesson" ? "" : "none";
+    targetRow.style.display = t === "text" ? "none" : "";
+    textRow.style.display = t === "text" ? "" : "none";
+    targetLabel.textContent = t === "lesson" ? "Cílová přesnost (%)" : t === "speed" ? "Cílová rychlost (zn/min)" : "Počet lekcí";
   }
   typeSel.addEventListener("change", syncFields);
+  if (isEdit) {
+    typeSel.value = existing.type;
+    if (existing.lessonId) overlay.querySelector("#assignLessonId").value = existing.lessonId;
+    if (existing.target !== undefined) overlay.querySelector("#assignTarget").value = existing.target;
+    if (existing.text) overlay.querySelector("#assignTextContent").value = existing.text;
+    overlay.querySelector("#assignLabel").value = existing.label || "";
+    const d = new Date(existing.deadline);
+    const pad = n => String(n).padStart(2, "0");
+    overlay.querySelector("#assignDeadline").value = d.getFullYear() + "-" + pad(d.getMonth() + 1) + "-" + pad(d.getDate()) + "T" + pad(d.getHours()) + ":" + pad(d.getMinutes());
+  }
   syncFields();
   overlay.querySelector("#assignCancelBtn").addEventListener("click", () => overlay.remove());
   overlay.querySelector("#assignCreateBtn").addEventListener("click", async () => {
     const errEl = overlay.querySelector("#assignErr");
     const type = typeSel.value;
-    const target = parseInt(overlay.querySelector("#assignTarget").value, 10);
     const deadlineVal = overlay.querySelector("#assignDeadline").value;
     const label = overlay.querySelector("#assignLabel").value.trim();
-    if (!target || target <= 0) { errEl.textContent = "Zadej cílovou hodnotu."; return; }
     if (!deadlineVal) { errEl.textContent = "Zadej deadline."; return; }
     const deadline = new Date(deadlineVal).getTime();
-    if (!deadline || deadline <= Date.now()) { errEl.textContent = "Deadline musí být v budoucnu."; return; }
-    const payload = { type: type, target: target, deadline: deadline, createdAt: Date.now() };
-    if (type === "lesson") payload.lessonId = overlay.querySelector("#assignLessonId").value;
+    if (!deadline || (!isEdit && deadline <= Date.now())) { errEl.textContent = "Deadline musí být v budoucnu."; return; }
+    const payload = { type: type, deadline: deadline, createdAt: isEdit ? existing.createdAt : Date.now() };
+    if (type === "text") {
+      const textVal = overlay.querySelector("#assignTextContent").value.trim();
+      if (!textVal) { errEl.textContent = "Napiš text k procvičení."; return; }
+      if (textVal.length > 2000) { errEl.textContent = "Text je moc dlouhý (max 2000 znaků)."; return; }
+      payload.text = textVal;
+    } else {
+      const target = parseInt(overlay.querySelector("#assignTarget").value, 10);
+      if (!target || target <= 0) { errEl.textContent = "Zadej cílovou hodnotu."; return; }
+      payload.target = target;
+      if (type === "lesson") payload.lessonId = overlay.querySelector("#assignLessonId").value;
+    }
     if (label) payload.label = label;
     try {
-      const id = "a" + Math.random().toString(36).slice(2, 10);
+      const id = isEdit ? existing.id : ("a" + Math.random().toString(36).slice(2, 10));
       await fbdb.ref("classes/" + classId + "/assignments/" + id).set(payload);
       overlay.remove();
       openClassDetail(classId, document.getElementById("classDetailTitle").textContent);
@@ -2784,7 +2743,7 @@ function startSolo(lesson, text, beginnerLevel) {
   const activeText = text || pickLessonText(lesson);
   show("solo");
   const isBegLesson = lesson.id && lesson.id.indexOf("beg") === 0;
-  const isCustomLesson = lesson.id && lesson.id.indexOf("custom_") === 0;
+  const isCustomLesson = lesson.id && (lesson.id.indexOf("custom_") === 0 || lesson.id.indexOf("assigntext_") === 0);
   const soloBackLink = document.getElementById("soloBackLink");
   soloBackLink.dataset.back = isBegLesson ? "beginner" : (isCustomLesson ? "class-detail" : "lessons");
   soloBackLink.textContent = isBegLesson ? "← zpět na kroky" : (isCustomLesson ? "← zpět do třídy" : "← zpět na lekce");
@@ -2823,9 +2782,9 @@ function startSolo(lesson, text, beginnerLevel) {
       const isBeg = isBegLesson;
       const qualifiesForBoard = lesson.id === "long" || lesson.id === "free";
       if (qualifiesForBoard) submitToLeaderboard((cachedProfile && cachedProfile.nickname) || playerName || "Anonym", cpmDone, accDone);
-      if (isCustomLesson && lesson.classId && lesson.customTextId && currentUser) {
-        fbdb.ref("classes/" + lesson.classId + "/customTexts/" + lesson.customTextId + "/results/" + currentUser.uid)
-          .set({ name: (cachedProfile && cachedProfile.nickname) || playerName || "Žák", cpm: cpmDone, acc: accDone, ts: Date.now() })
+      if (isCustomLesson && lesson.classId && lesson.assignmentId && currentUser) {
+        fbdb.ref("classes/" + lesson.classId + "/assignments/" + lesson.assignmentId + "/progress/" + currentUser.uid)
+          .set({ done: true, completedAt: Date.now(), cpm: cpmDone, acc: accDone })
           .catch(() => {});
       }
       recordResult({
@@ -2882,7 +2841,7 @@ document.getElementById("againSoloBtn").addEventListener("click", () => startSol
 document.getElementById("backLessonsBtn").addEventListener("click", () => {
   const l = window._lastLesson;
   if (l && l.id && l.id.indexOf("beg") === 0) { show("beginner"); }
-  else if (l && l.id && l.id.indexOf("custom_") === 0) { show("class-detail"); }
+  else if (l && l.id && (l.id.indexOf("custom_") === 0 || l.id.indexOf("assigntext_") === 0)) { show("class-detail"); }
   else { renderLessonList(); show("lessons"); }
 });
 
