@@ -766,6 +766,7 @@
       </div>
       <span class="school-cta-go">Otevřít →</span>
     </div>
+    <p class="hint" style="text-align:center; margin-top:18px;"><a href="zasady.html" target="_blank" rel="noopener" style="color:var(--tx2);">Zásady ochrany osobních údajů</a></p>
   </div>
 
   <div id="screen-profile" class="card" style="display:none;">
@@ -832,7 +833,6 @@
         <div class="quest-list" id="questList"></div>
     </div>
     <button class="btn-danger" id="authLogoutBtn" style="display:none;">Odhlásit se</button>
-    <p class="hint" style="text-align:center; margin-top:14px;"><a href="zasady.html" target="_blank" rel="noopener" style="color:var(--tx2);">Zásady ochrany osobních údajů</a></p>
   </div>
 
   <div id="screen-school" class="card" style="display:none;">
@@ -1520,7 +1520,7 @@ async function loadHomeProfile() {
   const profile = await loadProfile();
   renderProfile(profile);
   watchClassRace(profile);
-  watchNotifications();
+  watchNotifications(profile);
 }
 const BANNED_WORDS = [
   "kurva", "kurvy", "kurvo", "piča", "pica", "čurák", "curak", "zmrd", "zmrde", "hovado", "hovno",
@@ -2067,6 +2067,7 @@ async function renderClassSection(profile) {
       await saveProfile(profile);
       renderClassSection(profile);
       watchClassRace(profile);
+      watchNotifications(profile);
     });
   } else {
     joinBox.style.display = "";
@@ -2134,6 +2135,7 @@ document.getElementById("joinClassBtn").addEventListener("click", async () => {
     showToast("Přidáno do třídy „" + className + "“");
     renderClassSection(profile);
     watchClassRace(profile);
+    watchNotifications(profile);
   } catch (e) {
     console.error("Chyba při přidávání do třídy:", e);
     errEl.textContent = "Nepodařilo se přidat do třídy, zkus to prosím znovu.";
@@ -3070,79 +3072,150 @@ function watchClassRace(profile) {
   });
 }
 
-let notifRequestsRef = null;
-let notifFriendRequests = {};
-function watchNotifications() {
+const NOTIF_DUE_SOON_WINDOW = 24 * 3600 * 1000;
+let notifRequestsRef = null, notifAcceptsRef = null, notifAssignmentsRef = null;
+let notifFriendRequests = {}, notifFriendAccepts = {};
+let notifNewAssignments = [], notifDueSoonAssignments = [];
+function watchNotifications(profile) {
   if (notifRequestsRef) { notifRequestsRef.off(); notifRequestsRef = null; }
-  if (!currentUser) { notifFriendRequests = {}; updateNotifBadge(); return; }
-  notifRequestsRef = fbdb.ref("friendRequests/" + currentUser.uid);
-  notifRequestsRef.on("value", (snap) => {
-    notifFriendRequests = snap.val() || {};
+  if (notifAcceptsRef) { notifAcceptsRef.off(); notifAcceptsRef = null; }
+  if (notifAssignmentsRef) { notifAssignmentsRef.off(); notifAssignmentsRef = null; }
+  if (!currentUser) {
+    notifFriendRequests = {}; notifFriendAccepts = {}; notifNewAssignments = []; notifDueSoonAssignments = [];
     updateNotifBadge();
+    return;
+  }
+  notifRequestsRef = fbdb.ref("friendRequests/" + currentUser.uid);
+  notifRequestsRef.on("value", (snap) => { notifFriendRequests = snap.val() || {}; updateNotifBadge(); });
+  notifAcceptsRef = fbdb.ref("friendAccepts/" + currentUser.uid);
+  notifAcceptsRef.on("value", (snap) => { notifFriendAccepts = snap.val() || {}; updateNotifBadge(); });
+  if (profile && profile.classId) {
+    notifAssignmentsRef = fbdb.ref("classes/" + profile.classId + "/assignments");
+    notifAssignmentsRef.on("value", (snap) => { recomputeAssignmentNotifs(profile, snap.val() || {}); });
+  } else {
+    notifNewAssignments = []; notifDueSoonAssignments = [];
+    updateNotifBadge();
+  }
+}
+function recomputeAssignmentNotifs(profile, assignments) {
+  const now = Date.now();
+  const seenAt = profile.notifSeenAssignmentsAt || 0;
+  const uid = currentUser && currentUser.uid;
+  const list = Object.keys(assignments).map(id => Object.assign({ id: id }, assignments[id]));
+  const dueSoonIds = new Set();
+  notifDueSoonAssignments = list.filter(a => {
+    const done = !!(a.progress && uid && a.progress[uid] && a.progress[uid].done);
+    if (done || !a.deadline) return false;
+    const remaining = a.deadline - now;
+    const soon = remaining > 0 && remaining <= NOTIF_DUE_SOON_WINDOW;
+    if (soon) dueSoonIds.add(a.id);
+    return soon;
   });
+  notifNewAssignments = list.filter(a => (a.createdAt || 0) > seenAt && !dueSoonIds.has(a.id));
+  updateNotifBadge();
 }
 function updateNotifBadge() {
   const badge = document.getElementById("notifBadge");
   if (!badge) return;
-  const count = Object.keys(notifFriendRequests).length;
+  const count = Object.keys(notifFriendRequests).length + Object.keys(notifFriendAccepts).length
+    + notifNewAssignments.length + notifDueSoonAssignments.length;
   if (count > 0) { badge.textContent = count > 9 ? "9+" : String(count); badge.style.display = "flex"; }
   else { badge.style.display = "none"; }
 }
-function notifItemHtml(fromUid, r) {
+function friendRequestItemHtml(fromUid, r) {
   return '<div class="notif-item" data-notif-uid="' + fromUid + '"><div class="ni-text"><strong>' + (r.name || "Hráč") + '</strong> chce být tvůj přítel<div class="ni-sub">Žádost o přátelství</div></div>'
     + '<div class="notif-actions"><button class="btn-primary" data-notif-accept="' + fromUid + '" data-notif-name="' + (r.name || "Hráč") + '">Přijmout</button>'
     + '<button class="btn-secondary" data-notif-decline="' + fromUid + '">Odmítnout</button></div></div>';
 }
+function friendAcceptItemHtml(fromUid, a) {
+  return '<div class="notif-item" data-notif-accept-uid="' + fromUid + '"><div class="ni-text"><strong>' + (a.name || "Hráč") + '</strong> přijal/a tvou žádost o přátelství<div class="ni-sub">Nový přítel</div></div>'
+    + '<div class="notif-actions"><button class="btn-secondary" data-notif-ack="' + fromUid + '" data-notif-ack-name="' + (a.name || "Hráč") + '">OK</button></div></div>';
+}
+function dueSoonItemHtml(a) {
+  return '<div class="notif-item"><div class="ni-text">Blíží se termín: <strong>' + (a.label || ASSIGNMENT_TYPES[a.type].name) + '</strong>'
+    + '<div class="ni-sub">Ještě nesplněno · do ' + formatDeadline(a.deadline) + '</div></div></div>';
+}
+function newAssignmentItemHtml(a) {
+  return '<div class="notif-item"><div class="ni-text">Nový úkol: <strong>' + (a.label || ASSIGNMENT_TYPES[a.type].name) + '</strong>'
+    + '<div class="ni-sub">' + assignmentDesc(a) + '</div></div></div>';
+}
 function showNotifPanel() {
   const overlay = document.createElement("div");
   overlay.className = "levelup-overlay";
-  const uids = Object.keys(notifFriendRequests);
-  const body = uids.length
-    ? uids.map(fromUid => notifItemHtml(fromUid, notifFriendRequests[fromUid])).join("")
-    : '<div class="notif-list-empty">Zatím žádné notifikace.</div>';
+  const reqUids = Object.keys(notifFriendRequests);
+  const acceptUids = Object.keys(notifFriendAccepts);
+  const parts = [];
+  reqUids.forEach(uid => parts.push(friendRequestItemHtml(uid, notifFriendRequests[uid])));
+  notifDueSoonAssignments.forEach(a => parts.push(dueSoonItemHtml(a)));
+  acceptUids.forEach(uid => parts.push(friendAcceptItemHtml(uid, notifFriendAccepts[uid])));
+  notifNewAssignments.forEach(a => parts.push(newAssignmentItemHtml(a)));
+  const body = parts.length ? parts.join("") : '<div class="notif-list-empty">Zatím žádné notifikace.</div>';
   overlay.innerHTML = '<div class="levelup-card form-card" style="cursor:default; width:100%; max-width:400px; text-align:left;">'
     + '<p class="lu-title" style="margin-bottom:14px;">Notifikace</p><div id="notifPanelBody">' + body + '</div></div>';
   document.body.appendChild(overlay);
   overlay.addEventListener("click", (e) => { if (e.target === overlay) overlay.remove(); });
+  // prohlednuti panelu oznaci nove ukoly jako videne
+  if (notifNewAssignments.length && currentUser) {
+    const seenAt = Date.now();
+    loadProfile().then(profile => {
+      profile.notifSeenAssignmentsAt = seenAt;
+      return saveProfile(profile);
+    }).then(() => { notifNewAssignments = []; updateNotifBadge(); }).catch(() => {});
+  }
   function checkEmpty() {
     const listBody = overlay.querySelector("#notifPanelBody");
     if (listBody && !listBody.querySelector(".notif-item")) {
       listBody.innerHTML = '<div class="notif-list-empty">Zatím žádné notifikace.</div>';
     }
   }
-  function bindItemHandlers() {
-    overlay.querySelectorAll("[data-notif-accept]").forEach(btn => {
-      btn.addEventListener("click", async () => {
-        const fromUid = btn.dataset.notifAccept;
-        const fromName = btn.dataset.notifName;
+  overlay.querySelectorAll("[data-notif-accept]").forEach(btn => {
+    btn.addEventListener("click", async () => {
+      const fromUid = btn.dataset.notifAccept;
+      const fromName = btn.dataset.notifName;
+      const profile = await loadProfile();
+      profile.friends = profile.friends || {};
+      profile.friends[fromUid] = fromName;
+      await saveProfile(profile);
+      try {
+        await fbdb.ref("friendAccepts/" + fromUid + "/" + currentUser.uid).set({ name: profile.nickname || playerName || "Hráč" });
+        await fbdb.ref("friendRequests/" + currentUser.uid + "/" + fromUid).remove();
+      } catch (e) { /* tiché selhání */ }
+      showToast("Přátelství potvrzeno");
+      const item = overlay.querySelector('[data-notif-uid="' + fromUid + '"]');
+      if (item) item.remove();
+      checkEmpty();
+      renderFriendRequests();
+      renderFriendsList(profile);
+    });
+  });
+  overlay.querySelectorAll("[data-notif-decline]").forEach(btn => {
+    btn.addEventListener("click", async () => {
+      const fromUid = btn.dataset.notifDecline;
+      try { await fbdb.ref("friendRequests/" + currentUser.uid + "/" + fromUid).remove(); } catch (e) {}
+      const item = overlay.querySelector('[data-notif-uid="' + fromUid + '"]');
+      if (item) item.remove();
+      checkEmpty();
+      renderFriendRequests();
+    });
+  });
+  overlay.querySelectorAll("[data-notif-ack]").forEach(btn => {
+    btn.addEventListener("click", async () => {
+      const fromUid = btn.dataset.notifAck;
+      const fromName = btn.dataset.notifAckName;
+      try {
         const profile = await loadProfile();
         profile.friends = profile.friends || {};
         profile.friends[fromUid] = fromName;
+        if (profile.outgoingRequests) delete profile.outgoingRequests[fromUid];
         await saveProfile(profile);
-        try {
-          await fbdb.ref("friendAccepts/" + fromUid + "/" + currentUser.uid).set({ name: profile.nickname || playerName || "Hráč" });
-          await fbdb.ref("friendRequests/" + currentUser.uid + "/" + fromUid).remove();
-        } catch (e) { /* tiché selhání */ }
-        showToast("Přátelství potvrzeno");
-        const item = overlay.querySelector('[data-notif-uid="' + fromUid + '"]');
-        if (item) item.remove();
-        checkEmpty();
-        renderFriendRequests();
+        await fbdb.ref("friendAccepts/" + currentUser.uid + "/" + fromUid).remove();
         renderFriendsList(profile);
-      });
+      } catch (e) { /* tiché selhání */ }
+      const item = overlay.querySelector('[data-notif-accept-uid="' + fromUid + '"]');
+      if (item) item.remove();
+      checkEmpty();
     });
-    overlay.querySelectorAll("[data-notif-decline]").forEach(btn => {
-      btn.addEventListener("click", async () => {
-        const fromUid = btn.dataset.notifDecline;
-        try { await fbdb.ref("friendRequests/" + currentUser.uid + "/" + fromUid).remove(); } catch (e) {}
-        const item = overlay.querySelector('[data-notif-uid="' + fromUid + '"]');
-        if (item) item.remove();
-        checkEmpty();
-        renderFriendRequests();
-      });
-    });
-  }
-  bindItemHandlers();
+  });
 }
 document.getElementById("topNotifBtn").addEventListener("click", showNotifPanel);
 
