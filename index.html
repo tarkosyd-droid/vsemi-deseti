@@ -106,6 +106,8 @@
     padding: 13px 16px; cursor: pointer; transition: border-color 0.15s, transform 0.1s;
   }
   .lesson-row:hover { border-color: var(--accent); transform: translateX(2px); }
+  .lesson-row.static-row { cursor: default; }
+  .lesson-row.static-row:hover { border-color: var(--line); transform: none; }
   .lesson-row.locked-stage { opacity: 0.45; cursor: default; }
   .lesson-row.locked-stage:hover { border-color: var(--line); transform: none; }
   .lesson-row.current-stage {
@@ -1572,6 +1574,19 @@ function showPublicProfile(p) {
   document.body.appendChild(overlay);
   overlay.addEventListener("click", () => overlay.remove());
 }
+async function showTextResults(classId, textId, label) {
+  const overlay = document.createElement("div");
+  overlay.className = "levelup-overlay";
+  overlay.innerHTML = '<div class="levelup-card" style="cursor:default; max-width:360px; text-align:left;"><p class="lu-title" style="margin-bottom:12px;">' + label + '</p><p class="hint">Načítám…</p></div>';
+  document.body.appendChild(overlay);
+  overlay.addEventListener("click", (e) => { if (e.target === overlay) overlay.remove(); });
+  const snap = await fbdb.ref("classes/" + classId + "/customTexts/" + textId + "/results").get();
+  const rows = Object.values(snap.val() || {}).sort((a, b) => (b.cpm || 0) - (a.cpm || 0));
+  const body = rows.length
+    ? '<div class="lesson-list">' + rows.map(r => '<div class="lesson-row static-row"><span class="name">' + (r.name || "Žák") + '</span><span class="best">' + Math.round(r.cpm || 0) + ' zn/min · ' + Math.round(r.acc || 0) + '%</span></div>').join("") + '</div>'
+    : '<p class="hint">Zatím to nikdo z žáků nezkusil.</p>';
+  overlay.querySelector(".levelup-card").innerHTML = '<p class="lu-title" style="margin-bottom:12px;">' + label + '</p>' + body;
+}
 function showConfirm(title, message) {
   return new Promise((resolve) => {
     const overlay = document.createElement("div");
@@ -2135,8 +2150,8 @@ function renderClassTexts(classId, isOwner, customTexts) {
     html += '<p class="hint">' + (isOwner ? "Zatím žádné vlastní texty — přidej první výše." : "Učitel zatím nepřidal žádný vlastní text.") + '</p>';
   } else {
     html += '<div class="lesson-list">' + list.map((t, i) =>
-      '<div class="lesson-row" data-tidx="' + i + '"><span class="name">' + textPreview(t.text) + '</span>' +
-      (isOwner ? '<span class="friend-remove" data-del="' + t.id + '" title="Smazat text">✕</span>' : '<span class="best">Procvičit →</span>') +
+      '<div class="lesson-row" data-tidx="' + i + '"><span class="name">' + (isOwner ? textPreview(t.text) : "Text od učitele " + (i + 1)) + '</span>' +
+      (isOwner ? '<span class="best">Výsledky →</span><span class="friend-remove" data-del="' + t.id + '" title="Smazat text">✕</span>' : '<span class="best">Procvičit →</span>') +
       '</div>'
     ).join("") + '</div>';
   }
@@ -2154,11 +2169,12 @@ function renderClassTexts(classId, isOwner, customTexts) {
       } catch (e) { showToast("Text se nepodařilo uložit."); }
     });
   }
-  box.querySelectorAll(".lesson-row").forEach(row => {
+  box.querySelectorAll(".lesson-row").forEach((row, i) => {
     const item = list[parseInt(row.dataset.tidx, 10)];
     row.addEventListener("click", (e) => {
       if (e.target.dataset.del) return;
-      startSolo({ id: "custom_" + item.id, name: "Text od učitele", texts: [item.text] });
+      if (isOwner) { showTextResults(classId, item.id, "Text od učitele " + (i + 1)); return; }
+      startSolo({ id: "custom_" + item.id, name: "Text od učitele", texts: [item.text], classId: classId, customTextId: item.id });
     });
   });
   box.querySelectorAll("[data-del]").forEach(btn => {
@@ -2564,9 +2580,11 @@ function startSolo(lesson, text, beginnerLevel) {
   const activeText = text || pickLessonText(lesson);
   show("solo");
   const isBegLesson = lesson.id && lesson.id.indexOf("beg") === 0;
+  const isCustomLesson = lesson.id && lesson.id.indexOf("custom_") === 0;
   const soloBackLink = document.getElementById("soloBackLink");
-  soloBackLink.dataset.back = isBegLesson ? "beginner" : "lessons";
-  soloBackLink.textContent = isBegLesson ? "← zpět na kroky" : "← zpět na lekce";
+  soloBackLink.dataset.back = isBegLesson ? "beginner" : (isCustomLesson ? "class-detail" : "lessons");
+  soloBackLink.textContent = isBegLesson ? "← zpět na kroky" : (isCustomLesson ? "← zpět do třídy" : "← zpět na lekce");
+  document.getElementById("backLessonsBtn").textContent = isCustomLesson ? "Zpět do třídy" : "Zpět na lekce";
   document.getElementById("soloStatsRow").style.display = isBegLesson ? "none" : "";
   const textEl = document.getElementById("soloText");
   const outerEl = document.getElementById("soloTextOuter");
@@ -2601,6 +2619,11 @@ function startSolo(lesson, text, beginnerLevel) {
       const isBeg = isBegLesson;
       const qualifiesForBoard = lesson.id === "long" || lesson.id === "free";
       if (qualifiesForBoard) submitToLeaderboard((cachedProfile && cachedProfile.nickname) || playerName || "Anonym", cpmDone, accDone);
+      if (isCustomLesson && lesson.classId && lesson.customTextId && currentUser) {
+        fbdb.ref("classes/" + lesson.classId + "/customTexts/" + lesson.customTextId + "/results/" + currentUser.uid)
+          .set({ name: (cachedProfile && cachedProfile.nickname) || playerName || "Žák", cpm: cpmDone, acc: accDone, ts: Date.now() })
+          .catch(() => {});
+      }
       recordResult({
         cpm: cpmDone, acc: accDone, lessonId: lesson.id, isRace: false, won: false,
         textLength: state.text.length, timeMs: elapsed,
@@ -2655,6 +2678,7 @@ document.getElementById("againSoloBtn").addEventListener("click", () => startSol
 document.getElementById("backLessonsBtn").addEventListener("click", () => {
   const l = window._lastLesson;
   if (l && l.id && l.id.indexOf("beg") === 0) { show("beginner"); }
+  else if (l && l.id && l.id.indexOf("custom_") === 0) { show("class-detail"); }
   else { renderLessonList(); show("lessons"); }
 });
 
