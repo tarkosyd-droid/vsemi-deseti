@@ -1188,9 +1188,30 @@ async function loadProfile() {
 }
 async function saveProfile(p) {
   try {
-    if (currentUser) { await fbdb.ref("users/" + currentUser.uid + "/profile").set(p); }
+    if (currentUser) {
+      await fbdb.ref("users/" + currentUser.uid + "/profile").set(p);
+      const pub = { name: p.nickname || "Hráč" };
+      if (p.avatarUrl) pub.avatarUrl = p.avatarUrl;
+      else if (p.avatar) pub.avatar = p.avatar;
+      fbdb.ref("publicProfiles/" + currentUser.uid).set(pub).catch(() => {});
+    }
     else { localStorage.setItem("profile:me", JSON.stringify(p)); }
   } catch (e) { /* ignorováno */ }
+}
+// docte aktualni jmeno+fotku pro seznam uctu; klice bez uctu (anonymni zaznamy) proste vrati nic
+async function fetchPublicProfiles(keys) {
+  const map = {};
+  await Promise.all(keys.map(async (k) => {
+    try {
+      const snap = await fbdb.ref("publicProfiles/" + k).get();
+      if (snap.exists()) map[k] = snap.val();
+    } catch (e) { /* zustane bez prekryti, pouzije se stary udaj */ }
+  }));
+  return map;
+}
+function overlayLive(p, live) {
+  if (!live) return p;
+  return Object.assign({}, p, { name: live.name || p.name, avatar: live.avatar, avatarUrl: live.avatarUrl });
 }
 function updateAuthUI() {
   const out = document.getElementById("authLoggedOut");
@@ -1385,15 +1406,25 @@ async function loadHomeProfile() {
 const BANNED_WORDS = [
   "kurva", "kurvy", "kurvo", "piča", "pica", "čurák", "curak", "zmrd", "zmrde", "hovado", "hovno",
   "debil", "kokot", "mrdka", "mrdat", "posrat", "sráč", "srac", "buzna", "buzerant", "teploush",
-  "negr", "negro", "cikán", "cikan", "kripl", "retard",
+  "negr", "negro", "niger", "cikán", "cikan", "kripl", "retard",
   "fuck", "shit", "bitch", "cunt", "nigger", "nigga", "faggot", "asshole", "whore", "slut"
 ];
 function stripDiacritics(s) {
   return s.normalize("NFD").replace(/[\u0300-\u036f]/g, "");
 }
+const ALLOWED_WORDS = ["nigerie", "nigerijsky", "nigerijska", "nigerijec", "cikanek"];
+function normalizeForFilter(s) {
+  let n = stripDiacritics((s || "").toLowerCase());
+  n = n.replace(/[1!|]/g, "i").replace(/3/g, "e").replace(/0/g, "o")
+       .replace(/[4@]/g, "a").replace(/[5$]/g, "s").replace(/7/g, "t");
+  n = n.replace(/[^a-z]/g, "");
+  return n.replace(/(.)\1+/g, "$1");
+}
 function containsProfanity(text) {
-  const norm = stripDiacritics((text || "").toLowerCase());
-  return BANNED_WORDS.some(w => norm.includes(stripDiacritics(w)));
+  let norm = normalizeForFilter(text);
+  if (!norm) return false;
+  ALLOWED_WORDS.forEach(w => { norm = norm.split(normalizeForFilter(w)).join(""); });
+  return BANNED_WORDS.some(w => norm.includes(normalizeForFilter(w)));
 }
 function askNickname() {
   return new Promise((resolve) => {
@@ -1735,6 +1766,7 @@ async function renderFriendsList(profile) {
   const boardPromise = keys.length
     ? fbdb.ref("board/top").once("value").catch(() => null)
     : Promise.resolve(null);
+  const livePromise = keys.length ? fetchPublicProfiles(keys) : Promise.resolve({});
   await Promise.all([reconcileFriendAccepts(profile), renderFriendRequests()]);
   if (!keys.length) {
     el.innerHTML = '<div class="friends-empty">Zatím žádní přátelé — přidej je vyhledáním výše.</div>';
@@ -1749,13 +1781,17 @@ async function renderFriendsList(profile) {
       if (!scoreMap[k] || p.cpm > scoreMap[k].cpm) scoreMap[k] = p;
     });
   } catch (e) { /* leaderboard lookup optional */ }
+  // aktualni jmeno a fotku bereme z publicProfiles, ne z uloziste pratel (to se plni jen pri prijeti zadosti)
+  const liveMap = await livePromise;
+  const nameOf = (k) => (liveMap[k] && liveMap[k].name) || friends[k];
   el.innerHTML = keys.map(k => {
     const found = scoreMap[k];
+    const live = liveMap[k];
     const sub = found ? found.cpm + " zn/min · osobní rekord" : "Zatím bez výsledku";
-    const avatar = found ? avatarInner(found) : "🙂";
+    const avatar = live ? avatarInner(live) : (found ? avatarInner(found) : "🙂");
     return '<div class="friend-card" data-view-friend="' + k + '">'
       + '<div class="friend-avatar">' + avatar + '</div>'
-      + '<div class="friend-info"><div class="friend-name">' + friends[k] + '</div><div class="friend-sub">' + sub + '</div></div>'
+      + '<div class="friend-info"><div class="friend-name">' + nameOf(k) + '</div><div class="friend-sub">' + sub + '</div></div>'
       + '<div class="friend-actions">'
       + '<span class="friend-action-btn" title="Založit závod" data-invite-friend="1">' + svgIcon("flagicon", 15) + '</span>'
       + '<span class="friend-remove" data-friend-key="' + k + '" title="Odebrat">✕</span>'
@@ -1766,7 +1802,13 @@ async function renderFriendsList(profile) {
     card.addEventListener("click", () => {
       const k = card.dataset.viewFriend;
       const found = scoreMap[k];
-      showPublicProfile({ name: friends[k], cpm: found ? found.cpm : undefined, acc: found ? found.acc : undefined, avatar: found ? found.avatar : undefined, avatarUrl: found ? found.avatarUrl : undefined });
+      const live = liveMap[k];
+      showPublicProfile({
+        name: nameOf(k),
+        cpm: found ? found.cpm : undefined, acc: found ? found.acc : undefined,
+        avatar: live ? live.avatar : (found ? found.avatar : undefined),
+        avatarUrl: live ? live.avatarUrl : (found ? found.avatarUrl : undefined)
+      });
     });
   });
   el.querySelectorAll(".friend-remove").forEach(btn => {
@@ -2178,13 +2220,15 @@ async function loadFriendsLeaderboard(el) {
       const key = p.key || p.name;
       if (!byPlayer[key] || p.cpm > byPlayer[key].cpm) byPlayer[key] = p;
     });
-    const list = Object.values(byPlayer)
+    let list = Object.values(byPlayer)
       .filter(p => { const k = p.key || p.name; return friendKeys.includes(k) || k === myKey; })
       .sort((a, b) => b.cpm - a.cpm);
     if (!list.length) {
       el.innerHTML = '<p class="hint" style="margin:0;">Tvoji přátelé zatím nemají žádný výsledek v žebříčku.</p>';
       return;
     }
+    const liveMap = await fetchPublicProfiles(list.filter(p => p.hasAccount).map(p => p.key));
+    list = list.map(p => overlayLive(p, liveMap[p.key]));
     el.innerHTML = '<div class="podium-rest">' + list.map((p, i) => {
       const k = p.key || p.name;
       const meTag = k === myKey ? " (ty)" : "";
@@ -2207,8 +2251,10 @@ async function loadHomeLeaderboard() {
       const key = p.key || p.name;
       if (!byPlayer[key] || p.cpm > byPlayer[key].cpm) byPlayer[key] = p;
     });
-    const list = Object.values(byPlayer).sort((a, b) => b.cpm - a.cpm).slice(0, 10);
+    let list = Object.values(byPlayer).sort((a, b) => b.cpm - a.cpm).slice(0, 10);
     if (!list.length) { el.innerHTML = '<p class="hint" style="margin:0;">Zatím žádné výsledky. Buď první!</p>'; return; }
+    const liveMap = await fetchPublicProfiles(list.filter(p => p.hasAccount).map(p => p.key));
+    list = list.map(p => overlayLive(p, liveMap[p.key]));
     const top3 = list.slice(0, 3);
     const rest = list.slice(3, 10);
     const medal = [svgIcon("medalGold",16), svgIcon("medalSilver",16), svgIcon("medalBronze",16)];
