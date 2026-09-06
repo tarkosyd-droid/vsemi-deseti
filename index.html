@@ -334,7 +334,29 @@
     text-align: center; font-family: 'Space Grotesk', sans-serif; font-size: 72px; font-weight: 700; padding: 44px 0;
     background: linear-gradient(90deg, var(--accent), var(--accent2)); -webkit-background-clip: text; background-clip: text; color: transparent;
   }
+  #classRaceBanner {
+    position: fixed; top: 0; left: 0; right: 0; z-index: 80;
+    display: flex; align-items: center; gap: 12px; padding: 11px 16px;
+    background: linear-gradient(90deg, var(--accent), var(--accent2)); color: #080b1a;
+    font-size: 14px; font-weight: 700; box-shadow: 0 6px 20px -8px rgba(0,0,0,0.7);
+  }
+  #classRaceBanner .crb-text { flex: 1; }
+  #classRaceBanner .crb-join {
+    border: none; border-radius: 9px; padding: 7px 14px; font-weight: 700; font-size: 13px;
+    background: #0e1017; color: #fff; cursor: pointer;
+  }
+  #classRaceBanner .crb-close {
+    border: none; background: transparent; color: #080b1a; font-size: 15px; cursor: pointer; padding: 4px 6px;
+  }
   .track { display: flex; flex-direction: column; gap: 16px; margin-bottom: 20px; }
+  .track.compact { gap: 7px; max-height: 44vh; overflow-y: auto; padding-right: 4px; }
+  .track.compact .lane-label { font-size: 10.5px; margin-bottom: 2px; }
+  .track.compact .lane-track { height: 16px; }
+  .track.compact .lane-avatar { width: 14px; height: 14px; font-size: 9px; border-width: 1px; box-shadow: none; }
+  .track.compact .mini-avatar { width: 15px; height: 15px; font-size: 10px; }
+  .track.compact .flag { font-size: 11px; right: 5px; }
+  .track.compact .lane-me { position: sticky; top: 0; z-index: 2; background: var(--bg1); padding-bottom: 3px; }
+  .lane-me .lane-label b { color: var(--accent); }
   .lane-label { display: flex; justify-content: space-between; font-size: 12px; margin-bottom: 5px; color: var(--tx2); }
   .lane-label b { color: var(--tx); font-weight: 600; }
   .lane-track {
@@ -554,6 +576,11 @@
 </style>
 </head>
 <body>
+  <div id="classRaceBanner" style="display:none;">
+    <span class="crb-text"></span>
+    <button class="crb-join" id="crbJoin">Připojit se</button>
+    <button class="crb-close" id="crbClose" title="Skrýt">✕</button>
+  </div>
 <script>
   const firebaseConfig = {
     apiKey: "AIzaSyDYMFmP5A-PP76xrXNtcXOrVdptEzb5154",
@@ -727,6 +754,7 @@
     <p class="lb-title" id="classDetailTitle" style="margin-top:14px;">Třída</p>
     <p class="hint" id="classDetailCode"></p>
     <div style="display:flex; gap:8px; margin:12px 0;">
+      <button class="btn-primary" id="startClassRaceBtn" style="margin-bottom:0; width:auto;">Spustit závod pro třídu</button>
       <button class="btn-secondary" id="exportCsvBtn" style="margin-bottom:0;">Export CSV</button>
       <button class="btn-secondary" id="exportPdfBtn" style="margin-bottom:0;">Export PDF</button>
       <button class="btn-danger" id="deleteClassBtn" style="margin-bottom:0;">Smazat třídu</button>
@@ -811,6 +839,7 @@
   <div id="screen-lobby" class="card" style="display:none;">
     <div class="code-display" id="lobbyCodeDisplay">----</div>
     <p class="hint" id="lobbyHint">Pošli tento kód ostatním hráčům.</p>
+    <p class="hint" id="lobbyCount" style="margin-top:-4px;"></p>
     <ul class="players" id="playerList"></ul>
     <button class="btn-primary" id="startBtn">Spustit závod</button>
     <p class="hint" id="startErr" style="display:none; color:#ff6b6b; margin-top:8px;"></p>
@@ -1351,6 +1380,7 @@ async function loadHomeProfile() {
   if (cachedProfile) renderProfile(cachedProfile);
   const profile = await loadProfile();
   renderProfile(profile);
+  watchClassRace(profile);
 }
 const BANNED_WORDS = [
   "kurva", "kurvy", "kurvo", "piča", "pica", "čurák", "curak", "zmrd", "zmrde", "hovado", "hovno",
@@ -1852,6 +1882,7 @@ async function renderClassSection(profile) {
       delete profile.className;
       await saveProfile(profile);
       renderClassSection(profile);
+      watchClassRace(profile);
     });
   } else {
     joinBox.style.display = "";
@@ -1918,6 +1949,7 @@ document.getElementById("joinClassBtn").addEventListener("click", async () => {
     input.value = "";
     showToast("Přidáno do třídy „" + className + "“");
     renderClassSection(profile);
+    watchClassRace(profile);
   } catch (e) {
     console.error("Chyba při přidávání do třídy:", e);
     errEl.textContent = "Nepodařilo se přidat do třídy, zkus to prosím znovu.";
@@ -1938,6 +1970,7 @@ async function openClassDetail(classId, className) {
     const isOwner = !!(currentUser && data.ownerUid === currentUser.uid);
     currentClassInviteCode = data.inviteCode || null;
     document.getElementById("classDetailCode").textContent = isOwner ? "Kód pro žáky: " + (data.inviteCode || "—") : "";
+    document.getElementById("startClassRaceBtn").style.display = isOwner ? "" : "none";
     document.getElementById("exportCsvBtn").style.display = isOwner ? "" : "none";
     document.getElementById("exportPdfBtn").style.display = isOwner ? "" : "none";
     document.getElementById("deleteClassBtn").style.display = isOwner ? "" : "none";
@@ -2460,18 +2493,25 @@ function randomCode() {
   let c = ""; for (let i = 0; i < 4; i++) c += chars[Math.floor(Math.random() * chars.length)];
   return c;
 }
-async function getLobby(code) {
-  try { const snap = await fbdb.ref("lobby/" + code).get(); return snap.exists() ? snap.val() : null; }
-  catch (e) { return null; }
+const MAX_PLAYERS = 30;
+const COMPACT_FROM = 9;
+function lobbyRef(code, sub) { return fbdb.ref("lobby/" + code + (sub ? "/" + sub : "")); }
+async function readLobby(code, sub, fallback) {
+  try { const snap = await lobbyRef(code, sub).get(); return snap.exists() ? snap.val() : fallback; }
+  catch (e) { return fallback; }
 }
-async function setLobby(code, obj) {
-  try { await fbdb.ref("lobby/" + code).set(obj); return true; }
+const getMeta = (code) => readLobby(code, "meta", null);
+const getPlayers = (code) => readLobby(code, "players", {});
+async function writeLobby(ref, value, merge) {
+  try { await (merge ? ref.update(value) : ref.set(value)); return true; }
   catch (e) { return false; }
 }
 
 let playerId = null, playerName = "", lobbyCode = null, isHost = false;
 let gameTimer = null, countdownTimer = null;
 let raceEngine = null, raceSubmitted = false, winRecorded = false, lastProgressSent = 0;
+let laneEls = {};
+let lobbyMeta = null, lobbyPlayers = {}, lobbyLive = {};
 
 document.getElementById("goRace").addEventListener("click", () => show("race-home"));
 
@@ -2489,13 +2529,11 @@ document.getElementById("createBtn").addEventListener("click", async () => {
   const err = document.getElementById("homeErr");
   err.textContent = "";
   playerName = autoPlayerName(); playerId = uid(); lobbyCode = randomCode(); isHost = true;
-  const lobby = {
-    code: lobbyCode, hostId: playerId, status: "waiting", startTime: null, duration: 45000,
-    players: { [playerId]: Object.assign({ name: playerName, wpm: 0, acc: 100, progress: 0, finished: false }, playerAvatarFields()) },
-    createdAt: Date.now()
-  };
-  const ok = await setLobby(lobbyCode, lobby);
+  const ok = await writeLobby(lobbyRef(lobbyCode, "meta"), {
+    code: lobbyCode, hostId: playerId, status: "waiting", startTime: null, duration: 45000, createdAt: Date.now()
+  });
   if (!ok) { err.textContent = "Lobby se nepodařilo vytvořit, zkus to znovu."; return; }
+  await joinLobbyAs(lobbyCode);
   enterLobbyScreen();
 });
 
@@ -2505,15 +2543,27 @@ document.getElementById("joinBtn").addEventListener("click", async () => {
   err.textContent = "";
   const code = codeEl.value.trim().toUpperCase();
   if (!code) { err.textContent = "Zadej kód lobby."; return; }
-  const lobby = await getLobby(code);
-  if (!lobby) { err.textContent = "Lobby s tímto kódem neexistuje."; return; }
-  if (lobby.status !== "waiting") { err.textContent = "Tenhle závod už běží, počkej na další kolo."; return; }
+  const meta = await getMeta(code);
+  if (!meta) { err.textContent = "Lobby s tímto kódem neexistuje."; return; }
+  if (meta.status !== "waiting") { err.textContent = "Tenhle závod už běží, počkej na další kolo."; return; }
+  const existing = await getPlayers(code);
+  if (Object.keys(existing).length >= MAX_PLAYERS) { err.textContent = "Závod je plný — vejde se do něj " + MAX_PLAYERS + " hráčů."; return; }
   playerName = autoPlayerName(); playerId = uid(); lobbyCode = code; isHost = false;
-  lobby.players[playerId] = Object.assign({ name: playerName, wpm: 0, acc: 100, progress: 0, finished: false }, playerAvatarFields());
-  await setLobby(code, lobby);
+  await joinLobbyAs(code);
   enterLobbyScreen();
 });
 
+async function joinLobbyAs(code) {
+  // staticka data hrace se zapisuji jen jednou pri pripojeni, ne pri kazde aktualizaci
+  await writeLobby(lobbyRef(code, "players/" + playerId), Object.assign({ name: playerName }, playerAvatarFields()));
+  await writeLobby(lobbyRef(code, "live/" + playerId), { p: 0, w: 0, a: 100, f: false });
+}
+function onScreen(id) { return document.getElementById("screen-" + id).style.display !== "none"; }
+function playerCount() { return Object.keys(lobbyPlayers).length; }
+function orderedPids() {
+  const pids = Object.keys(lobbyPlayers);
+  return pids.sort((a, b) => (a === playerId ? -1 : b === playerId ? 1 : 0));
+}
 function enterLobbyScreen() {
   document.getElementById("lobbyCodeDisplay").textContent = lobbyCode;
   document.getElementById("startBtn").style.display = isHost ? "" : "none";
@@ -2525,61 +2575,133 @@ function enterLobbyScreen() {
   show("lobby");
   startPolling();
 }
-function renderPlayers(lobby) {
+function renderPlayers() {
   const list = document.getElementById("playerList");
   list.innerHTML = "";
-  const entries = Object.entries(lobby.players || {});
-  entries.forEach(([pid, p]) => {
+  const hostId = lobbyMeta ? lobbyMeta.hostId : null;
+  Object.entries(lobbyPlayers).forEach(([pid, p]) => {
     const li = document.createElement("li");
-    const hostTag = pid === lobby.hostId ? '<span class="tag">zakladatel</span>' : "";
+    const hostTag = pid === hostId ? '<span class="tag">zakladatel</span>' : "";
     li.innerHTML = "<span class=\"with-avatar\"><span class=\"mini-avatar\">" + avatarInner(p) + "</span>" + p.name + (pid === playerId ? " (ty)" : "") + "</span><span>" + hostTag + "</span>";
     list.appendChild(li);
   });
+  const cnt = playerCount();
+  document.getElementById("lobbyCount").textContent = cnt + " / " + MAX_PLAYERS + " hráčů";
 }
-let lobbyListenerRef = null;
+let metaListenerRef = null, playersListenerRef = null, liveListenerRef = null;
 function startPolling() {
   stopPolling();
   if (!lobbyCode) return;
-  lobbyListenerRef = fbdb.ref("lobby/" + lobbyCode);
-  lobbyListenerRef.on("value", (snap) => {
-    const lobby = snap.val();
-    if (!lobby) return;
-    if (document.getElementById("screen-lobby").style.display !== "none") {
-      renderPlayers(lobby);
-      if (lobby.status === "playing") beginCountdownFromLobby(lobby);
-    } else if (document.getElementById("screen-race").style.display !== "none") {
-      renderRaceTrack(lobby);
-    } else if (document.getElementById("screen-results").style.display !== "none") {
-      if (lobby.status === "waiting") { enterLobbyScreen(); return; }
-      renderResults(lobby);
-    }
+  // meta se meni zridka, players jen pri pripojeni, live casto ale po malych kouscich
+  metaListenerRef = lobbyRef(lobbyCode, "meta");
+  playersListenerRef = lobbyRef(lobbyCode, "players");
+  liveListenerRef = lobbyRef(lobbyCode, "live");
+
+  metaListenerRef.on("value", (snap) => {
+    lobbyMeta = snap.val();
+    if (!lobbyMeta) return;
+    if (onScreen("lobby") && lobbyMeta.status === "playing") beginCountdownFromLobby(lobbyMeta);
+    else if (onScreen("results") && lobbyMeta.status === "waiting") enterLobbyScreen();
   });
+  playersListenerRef.on("value", (snap) => {
+    lobbyPlayers = snap.val() || {};
+    if (onScreen("lobby")) renderPlayers();
+    else if (onScreen("race")) buildRaceTrack();
+    else if (onScreen("results")) renderResults();
+  });
+  const liveUpdate = (snap) => {
+    lobbyLive[snap.key] = snap.val() || {};
+    if (onScreen("race")) updateLane(snap.key);
+    else if (onScreen("results")) renderResults();
+  };
+  liveListenerRef.on("child_added", liveUpdate);
+  liveListenerRef.on("child_changed", liveUpdate);
+  liveListenerRef.on("child_removed", (snap) => { delete lobbyLive[snap.key]; });
 }
-function stopPolling() { if (lobbyListenerRef) { lobbyListenerRef.off(); lobbyListenerRef = null; } }
+function stopPolling() {
+  [metaListenerRef, playersListenerRef, liveListenerRef].forEach(r => { if (r) r.off(); });
+  metaListenerRef = playersListenerRef = liveListenerRef = null;
+}
 
 document.getElementById("startBtn").addEventListener("click", async () => {
-  const lobby = await getLobby(lobbyCode);
-  if (!lobby) return;
-  const playerCount = Object.keys(lobby.players || {}).length;
   const errEl = document.getElementById("startErr");
-  if (playerCount < 2) {
+  if (playerCount() < 2) {
     errEl.textContent = "Potřebuješ aspoň 2 hráče v lobby, než můžeš závod spustit.";
     errEl.style.display = "";
     return;
   }
   errEl.style.display = "none";
-  lobby.status = "playing"; lobby.startTime = Date.now() + 3000;
-  await setLobby(lobbyCode, lobby);
-  beginCountdownFromLobby(lobby);
+  const patch = { status: "playing", startTime: Date.now() + 3000 };
+  await writeLobby(lobbyRef(lobbyCode, "meta"), patch, true);
+  beginCountdownFromLobby(Object.assign({}, lobbyMeta, patch));
 });
 document.getElementById("leaveBtn").addEventListener("click", resetToHome);
 document.getElementById("againBtn").addEventListener("click", resetToHome);
 document.getElementById("rematchBtn").addEventListener("click", async () => {
-  const lobby = await getLobby(lobbyCode);
-  if (!lobby) return;
-  lobby.status = "waiting"; lobby.startTime = null;
-  Object.values(lobby.players).forEach(p => { p.wpm = 0; p.acc = 100; p.progress = 0; p.finished = false; });
-  await setLobby(lobbyCode, lobby);
+  const reset = {};
+  Object.keys(lobbyPlayers).forEach(pid => { reset[pid] = { p: 0, w: 0, a: 100, f: false }; });
+  await writeLobby(lobbyRef(lobbyCode, "live"), reset);
+  await writeLobby(lobbyRef(lobbyCode, "meta"), { status: "waiting", startTime: null }, true);
+  enterLobbyScreen();
+});
+
+/* ---------- class race: teacher starts, students get a banner ---------- */
+const CLASS_RACE_TTL = 600000;
+let classRaceRef = null, classRaceDismissed = null;
+
+function hideClassRaceBanner() { document.getElementById("classRaceBanner").style.display = "none"; }
+
+function watchClassRace(profile) {
+  if (classRaceRef) { classRaceRef.off(); classRaceRef = null; }
+  hideClassRaceBanner();
+  if (!currentUser || !profile || !profile.classId) return;
+  classRaceRef = fbdb.ref("classes/" + profile.classId + "/activeRace");
+  classRaceRef.on("value", (snap) => {
+    const r = snap.val();
+    const banner = document.getElementById("classRaceBanner");
+    const stale = !r || !r.code || (Date.now() - (r.startedAt || 0) > CLASS_RACE_TTL);
+    if (stale || r.code === classRaceDismissed || r.code === lobbyCode) { hideClassRaceBanner(); return; }
+    banner.querySelector(".crb-text").textContent = (r.by || "Učitel") + " spustil závod pro třídu";
+    banner.dataset.code = r.code;
+    banner.style.display = "";
+  });
+}
+
+document.getElementById("crbClose").addEventListener("click", () => {
+  classRaceDismissed = document.getElementById("classRaceBanner").dataset.code || null;
+  hideClassRaceBanner();
+});
+
+document.getElementById("crbJoin").addEventListener("click", async () => {
+  const code = document.getElementById("classRaceBanner").dataset.code;
+  hideClassRaceBanner();
+  if (!code) return;
+  const meta = await getMeta(code);
+  if (!meta) { showToast("Závod už skončil."); return; }
+  if (meta.status !== "waiting") { showToast("Závod už běží, počkej na další kolo."); return; }
+  const existing = await getPlayers(code);
+  if (Object.keys(existing).length >= MAX_PLAYERS) { showToast("Závod je plný."); return; }
+  playerName = autoPlayerName(); playerId = uid(); lobbyCode = code; isHost = false;
+  await joinLobbyAs(code);
+  enterLobbyScreen();
+});
+
+document.getElementById("startClassRaceBtn").addEventListener("click", async () => {
+  const classId = currentClassDetailId;
+  if (!classId) return;
+  playerName = autoPlayerName(); playerId = uid(); lobbyCode = randomCode(); isHost = true;
+  const ok = await writeLobby(lobbyRef(lobbyCode, "meta"), {
+    code: lobbyCode, hostId: playerId, status: "waiting", startTime: null,
+    duration: 45000, createdAt: Date.now(), classId: classId
+  });
+  if (!ok) { showToast("Závod se nepodařilo založit."); return; }
+  await joinLobbyAs(lobbyCode);
+  try {
+    await fbdb.ref("classes/" + classId + "/activeRace").set({
+      code: lobbyCode, startedAt: Date.now(),
+      by: (cachedProfile && cachedProfile.nickname) || "Učitel"
+    });
+  } catch (e) { /* pozvanka je volitelna, zavod jde i pres kod */ }
   enterLobbyScreen();
 });
 
@@ -2612,7 +2734,9 @@ function beginRacing(startTime, duration, code) {
   const kbEl = document.getElementById("raceKeyboard");
   buildKeyboard(kbEl);
   const raceText = RACE_TEXTS[(hashCode(code + ":" + startTime) >>> 0) % RACE_TEXTS.length];
-  getLobby(lobbyCode).then(l => { if (l) renderRaceTrack(l); });
+  laneEls = {};
+  document.getElementById("raceTrack").innerHTML = "";
+  buildRaceTrack();
   raceEngine = makeTypingEngine({
     text: raceText, textEl, outerEl, keyboardEl: kbEl,
     onRender: (state) => {
@@ -2620,20 +2744,17 @@ function beginRacing(startTime, duration, code) {
       document.getElementById("raceProgressLabel").textContent = state.pos + " / " + state.text.length + " znaků";
       document.getElementById("raceProgressFill").style.width = pct + "%";
     },
-    onProgress: async (state) => {
+    onProgress: (state) => {
       const now = Date.now();
-      if (now - lastProgressSent > 900) {
-        lastProgressSent = now;
-        const lobby = await getLobby(lobbyCode);
-        if (lobby && lobby.players[playerId]) {
-          const elapsed = state.startTime ? (now - state.startTime) : 0;
-          lobby.players[playerId].progress = Math.round((state.pos / state.text.length) * 100);
-          lobby.players[playerId].wpm = computeCpm(state.correctKeys, elapsed);
-          lobby.players[playerId].acc = computeAcc(state.correctKeys, state.totalKeys);
-          Object.assign(lobby.players[playerId], playerAvatarFields());
-          await setLobby(lobbyCode, lobby);
-        }
-      }
+      if (now - lastProgressSent < 900) return;
+      lastProgressSent = now;
+      const elapsed = state.startTime ? (now - state.startTime) : 0;
+      // zapisuje se jen vlastni policko, bez cteni celeho lobby
+      lobbyRef(lobbyCode, "live/" + playerId).update({
+        p: Math.round((state.pos / state.text.length) * 100),
+        w: computeCpm(state.correctKeys, elapsed),
+        a: computeAcc(state.correctKeys, state.totalKeys)
+      }).catch(() => {});
     },
     onFinish: async (state) => { await finishRace(state); }
   });
@@ -2655,20 +2776,41 @@ function raceKeyHandler(e) {
     if (e.key.length === 1) raceEngine.onKey(e.key);
   }
 }
-function renderRaceTrack(lobby) {
+// pruhy se stavi jednou; pri kazde aktualizaci se meni jen sirka a cislo
+function buildRaceTrack() {
   const el = document.getElementById("raceTrack");
-  el.innerHTML = "";
-  Object.entries(lobby.players || {}).forEach(([pid, p], i) => {
-    const pct = Math.min(100, p.progress || 0);
+  el.classList.toggle("compact", playerCount() >= COMPACT_FROM);
+  Object.keys(laneEls).forEach(pid => {
+    if (!lobbyPlayers[pid]) { laneEls[pid].root.remove(); delete laneEls[pid]; }
+  });
+  orderedPids().forEach(pid => {
+    if (laneEls[pid]) return;
+    const p = lobbyPlayers[pid];
     const lane = document.createElement("div");
-    lane.className = "lane";
+    lane.className = "lane" + (pid === playerId ? " lane-me" : "");
     lane.innerHTML =
-      '<div class="lane-label"><b class="with-avatar"><span class="mini-avatar">' + avatarInner(p) + '</span>' + p.name + (pid === playerId ? " (ty)" : "") + '</b><span>' + (p.wpm || 0) + ' zn/min</span></div>'
-      + '<div class="lane-track"><div class="lane-progress" style="width:' + pct + '%"></div>'
-      + '<div class="lane-avatar" style="left:' + Math.min(96, pct) + '%">' + avatarInner(p) + '</div>'
+      '<div class="lane-label"><b class="with-avatar"><span class="mini-avatar">' + avatarInner(p) + '</span>' + p.name + (pid === playerId ? " (ty)" : "") + '</b><span class="lane-wpm">0 zn/min</span></div>'
+      + '<div class="lane-track"><div class="lane-progress"></div>'
+      + '<div class="lane-avatar">' + avatarInner(p) + '</div>'
       + '<span class="flag">' + svgIcon("flagicon",14) + '</span></div>';
     el.appendChild(lane);
+    laneEls[pid] = {
+      root: lane,
+      fill: lane.querySelector(".lane-progress"),
+      av: lane.querySelector(".lane-avatar"),
+      wpm: lane.querySelector(".lane-wpm")
+    };
+    updateLane(pid);
   });
+}
+function updateLane(pid) {
+  const L = laneEls[pid];
+  if (!L) { if (lobbyPlayers[pid]) buildRaceTrack(); return; }
+  const v = lobbyLive[pid] || {};
+  const pct = Math.min(100, v.p || 0);
+  L.fill.style.width = pct + "%";
+  L.av.style.left = Math.min(96, pct) + "%";
+  L.wpm.textContent = (v.w || 0) + " zn/min";
 }
 async function finishRace(state) {
   if (raceSubmitted) return;
@@ -2678,23 +2820,23 @@ async function finishRace(state) {
   const wpm = computeCpm(state.correctKeys, elapsed);
   const acc = computeAcc(state.correctKeys, state.totalKeys);
   const progress = Math.round((state.pos / state.text.length) * 100);
-  const lobby = await getLobby(lobbyCode);
-  if (lobby && lobby.players[playerId]) {
-    Object.assign(lobby.players[playerId], { wpm, acc, progress, finished: state.finished }, playerAvatarFields());
-    if (cachedProfile && cachedProfile.nickname) lobby.players[playerId].name = cachedProfile.nickname;
-    await setLobby(lobbyCode, lobby);
+  await writeLobby(lobbyRef(lobbyCode, "live/" + playerId), { p: progress, w: wpm, a: acc, f: state.finished }, true);
+  if (cachedProfile && cachedProfile.nickname) {
+    await writeLobby(lobbyRef(lobbyCode, "players/" + playerId + "/name"), cachedProfile.nickname);
   }
   if (state.finished) submitToLeaderboard((cachedProfile && cachedProfile.nickname) || playerName || "Anonym", wpm, acc);
   if (state.finished) recordResult({ cpm: wpm, acc, lessonId: "race", isRace: true, won: false, textLength: state.text.length, timeMs: elapsed });
-  const fresh = await getLobby(lobbyCode);
-  renderResults(fresh || lobby);
+  renderResults();
   setTimeout(() => { show("results"); startPolling(); }, 650);
 }
-function renderResults(lobby) {
+function renderResults() {
   const list = document.getElementById("resultsList");
   list.innerHTML = "";
-  const entries = Object.entries(lobby.players || {})
-    .map(([pid, p]) => ({ pid, ...p }))
+  const entries = Object.entries(lobbyPlayers)
+    .map(([pid, p]) => {
+      const v = lobbyLive[pid] || {};
+      return { pid, ...p, wpm: v.w || 0, acc: v.a || 0, progress: v.p || 0, finished: !!v.f };
+    })
     .sort((a, b) => {
       if (a.finished !== b.finished) return a.finished ? -1 : 1;
       if (a.finished && b.finished) return b.wpm - a.wpm;
@@ -2716,6 +2858,15 @@ function renderResults(lobby) {
   }
 }
 function resetToHome() {
+  if (isHost && lobbyMeta && lobbyMeta.classId) {
+    fbdb.ref("classes/" + lobbyMeta.classId + "/activeRace").remove().catch(() => {});
+  }
+  if (lobbyCode && playerId) {
+    const code = lobbyCode, pid = playerId;
+    lobbyRef(code, "players/" + pid).remove().catch(() => {});
+    lobbyRef(code, "live/" + pid).remove().catch(() => {});
+  }
+  lobbyMeta = null; lobbyPlayers = {}; lobbyLive = {}; laneEls = {};
   stopPolling();
   if (gameTimer) clearInterval(gameTimer);
   if (countdownTimer) clearInterval(countdownTimer);
