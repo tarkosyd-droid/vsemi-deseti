@@ -1795,6 +1795,24 @@ function showConfirm(title, message) {
     overlay.addEventListener("click", () => { overlay.remove(); resolve(false); });
   });
 }
+function showTrialOfferDialog() {
+  return new Promise((resolve) => {
+    const overlay = document.createElement("div");
+    overlay.className = "levelup-overlay";
+    overlay.innerHTML = '<div class="levelup-card" style="cursor:default;">'
+      + '<div class="lu-icon">🏫</div>'
+      + '<p class="lu-title" style="font-size:19px;">Funkce pro školu jsou prémiové</p>'
+      + '<p class="lu-sub" style="margin-bottom:16px;">Založení a správa třídy je placená funkce. Můžeš si ji ale nejdřív ' + SCHOOL_TRIAL_DAYS + ' dní vyzkoušet úplně zdarma, bez zadávání kódu.</p>'
+      + '<div style="display:flex; gap:10px;">'
+      + '<button class="btn-secondary" id="trialOfferNoBtn" style="margin-bottom:0;">Zrušit</button>'
+      + '<button class="btn-primary" id="trialOfferYesBtn" style="margin-bottom:0;">Vyzkoušet ' + SCHOOL_TRIAL_DAYS + ' dní zdarma</button>'
+      + '</div></div>';
+    document.body.appendChild(overlay);
+    overlay.querySelector("#trialOfferYesBtn").addEventListener("click", (e) => { e.stopPropagation(); overlay.remove(); resolve(true); });
+    overlay.querySelector("#trialOfferNoBtn").addEventListener("click", (e) => { e.stopPropagation(); overlay.remove(); resolve(false); });
+    overlay.addEventListener("click", () => { overlay.remove(); resolve(false); });
+  });
+}
 function showBadgeDetail(b, earned) {
   const overlay = document.createElement("div");
   overlay.className = "levelup-overlay";
@@ -2381,7 +2399,9 @@ document.getElementById("createClassBtn").addEventListener("click", async () => 
   if (!status.ok) {
     const hasAnyClass = profile.ownedClasses && Object.keys(profile.ownedClasses).length;
     if (status.type === "none" && !hasAnyClass) {
-      // uplne prvni trida ucitele - automaticky spustit zkusebni verzi bez nutnosti kodu
+      // uplne prvni trida ucitele - nejdriv upozornit, ze jde o premiovou funkci, a nabidnout zkusebni verzi
+      const wantsTrial = await showTrialOfferDialog();
+      if (!wantsTrial) return;
       profile.schoolAccess = { type: "trial", startedAt: Date.now(), expiresAt: Date.now() + SCHOOL_TRIAL_MS };
       await saveProfile(profile);
       status = schoolAccessStatus(profile);
