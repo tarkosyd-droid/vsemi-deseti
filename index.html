@@ -1035,10 +1035,14 @@
 /* ---------- keyboard layout ---------- */
 const ROWS = [
   [["1","lp"],["2","lr"],["3","lm"],["4","li"],["5","li"],["6","ri"],["7","ri"],["8","rm"],["9","rr"],["0","rp"]],
-  [["q","lp"],["w","lr"],["e","lm"],["r","li"],["t","li"],["z","ri"],["u","ri"],["i","rm"],["o","rr"],["p","rp"]],
-  [["a","lp"],["s","lr"],["d","lm"],["f","li"],["g","li"],["h","ri"],["j","ri"],["k","rm"],["l","rr"],[";","rp"]],
+  [["q","lp"],["w","lr"],["e","lm"],["r","li"],["t","li"],["z","ri"],["u","ri"],["i","rm"],["o","rr"],["p","rp"],["ú","rp"]],
+  [["a","lp"],["s","lr"],["d","lm"],["f","li"],["g","li"],["h","ri"],["j","ri"],["k","rm"],["l","rr"],["ů","rp"]],
   [["y","lp"],["x","lr"],["c","lm"],["v","li"],["b","li"],["n","ri"],["m","ri"],[",","rm"],[".","rr"],["/","rp"]],
 ];
+// na české (QWERTZ) klávesnici jsou háčky a čárky á é í ý ě š č ř ž bez shiftu přímo na číselné řadě
+const ROW0_ACCENTS = { "2":"ě","3":"š","4":"č","5":"ř","6":"ž","7":"ý","8":"á","9":"í","0":"é" };
+const ACCENT_TO_DIGIT = { "ě":"2","š":"3","č":"4","ř":"5","ž":"6","ý":"7","á":"8","í":"9","é":"0" };
+function keyLabel(ch) { return ROW0_ACCENTS[ch] || ch; }
 function buildKeyboard(el) {
   el.innerHTML = "";
   ROWS.forEach(row => {
@@ -1048,7 +1052,7 @@ function buildKeyboard(el) {
       const k = document.createElement("div");
       k.className = "key f-" + fg;
       k.dataset.key = ch;
-      k.textContent = ch;
+      k.textContent = keyLabel(ch);
       r.appendChild(k);
     });
     el.appendChild(r);
@@ -1063,19 +1067,28 @@ function buildKeyboard(el) {
   spaceRow.appendChild(sp);
   el.appendChild(spaceRow);
 }
+// ď, ť, ň a ó nemají vlastní přímou klávesu (píší se přes mrtvou klávesu), proto se pro zvýraznění
+// na klávesnici stále ukazuje jejich základní písmeno
 const DIACRITIC_MAP = { "á":"a","č":"c","ď":"d","é":"e","ě":"e","í":"i","ň":"n","ó":"o","ř":"r","š":"s","ť":"t","ú":"u","ů":"u","ý":"y","ž":"z" };
 function baseChar(ch) {
   const lower = ch.toLowerCase();
   return DIACRITIC_MAP[lower] || lower;
 }
+function resolveKeyTarget(ch) {
+  if (ch === " ") return " ";
+  const lower = ch.toLowerCase();
+  if (ACCENT_TO_DIGIT[lower]) return ACCENT_TO_DIGIT[lower];
+  if (lower === "ů" || lower === "ú") return lower;
+  return baseChar(ch);
+}
 function highlightNext(el, ch) {
   el.querySelectorAll(".key").forEach(k => k.classList.remove("next"));
-  const target = ch === " " ? " " : baseChar(ch);
+  const target = resolveKeyTarget(ch);
   const k = el.querySelector('.key[data-key="' + CSS.escape(target) + '"]');
   if (k) k.classList.add("next");
 }
 function flashKey(el, ch, ok) {
-  const target = ch === " " ? " " : baseChar(ch);
+  const target = resolveKeyTarget(ch);
   const k = el.querySelector('.key[data-key="' + CSS.escape(target) + '"]');
   if (!k) return;
   k.classList.add(ok ? "hitok" : "hitbad");
@@ -1097,18 +1110,24 @@ const BEGINNER_STAGES = [
   { id: "beg11", keys: ["y", "m"], name: "Krok 11: y, m", hint: "Malíček levé ruky dolů na Y, ukazováček pravé ruky dolů na M.", texts: ["yyy mmm ym my dary zima moje zase auto dort star jistota pes", "yyy mmm ym my dary zima moje zase auto dort star jistota pes yyy mmm ym my dary zima moje zase auto dort star jistota pes", "yyy mmm ym my dary zima moje zase auto dort star jistota pes yyy mmm ym my dary zima moje zase auto dort star jistota pes yyy mmm ym my dary zima moje zase auto dort star jistota pes"] },
   { id: "beg12", keys: ["x", "n"], name: "Krok 12: x, n", hint: "Prsteníček levé ruky dolů na X, ukazováček pravé ruky dolů na N.", texts: ["xxx nnn xn nx nos noha kmen zima moje zase auto dort star", "xxx nnn xn nx nos noha kmen zima moje zase auto dort star xxx nnn xn nx nos noha kmen zima moje zase auto dort star", "xxx nnn xn nx nos noha kmen zima moje zase auto dort star xxx nnn xn nx nos noha kmen zima moje zase auto dort star xxx nnn xn nx nos noha kmen zima moje zase auto dort star"] },
   { id: "beg13", keys: ["c", "v"], name: "Krok 13: c, v", hint: "Prostředníček levé ruky dolů na C, ukazováček levé ruky dolů na V. Tentokrát obě nová písmena leží pod levou rukou — prsty pravé ruky zůstávají na svém místě.", texts: ["ccc vvv cv vc voda cena dva nos noha kmen zima moje zase", "ccc vvv cv vc voda cena dva nos noha kmen zima moje zase ccc vvv cv vc voda cena dva nos noha kmen zima moje zase", "ccc vvv cv vc voda cena dva nos noha kmen zima moje zase ccc vvv cv vc voda cena dva nos noha kmen zima moje zase ccc vvv cv vc voda cena dva nos noha kmen zima moje zase"] },
-  { id: "beg14", keys: ["b"], name: "Krok 14: b — hotovo!", hint: "Ukazováček levé ruky dolů na B. Teď znáš všech 26 základních písmen bez diakritiky — háčky a čárky přijdou na řadu v běžných lekcích!", texts: ["bbb byt bota obal voda cena dva nos noha kmen zima moje", "bbb byt bota obal voda cena dva nos noha kmen zima moje bbb byt bota obal voda cena dva nos noha kmen zima moje", "bbb byt bota obal voda cena dva nos noha kmen zima moje bbb byt bota obal voda cena dva nos noha kmen zima moje bbb byt bota obal voda cena dva nos noha kmen zima moje"] },
+  { id: "beg14", keys: ["b"], name: "Krok 14: b", hint: "Ukazováček levé ruky dolů na B. Teď znáš všech 26 základních písmen! V dalších krocích tě čeká ještě háčky a čárky.", texts: ["bbb byt bota obal voda cena dva nos noha kmen zima moje", "bbb byt bota obal voda cena dva nos noha kmen zima moje bbb byt bota obal voda cena dva nos noha kmen zima moje", "bbb byt bota obal voda cena dva nos noha kmen zima moje bbb byt bota obal voda cena dva nos noha kmen zima moje bbb byt bota obal voda cena dva nos noha kmen zima moje"] },
+  { id: "beg15", keys: ["ě", "í"], name: "Krok 15: ě, í", hint: "Prsteníček levé ruky na ě (klávesa 2), prsteníček pravé ruky na í (klávesa 9). Háčky a čárky se na české klávesnici píší přímo, bez shiftu.", texts: ["ěěě ííí ěí íě dítě město sníh les", "ěěě ííí ěí íě dítě město sníh les ěěě ííí ěí íě dítě město sníh les", "ěěě ííí ěí íě dítě město sníh les ěěě ííí ěí íě dítě město sníh les ěěě ííí ěí íě dítě město sníh les"] },
+  { id: "beg16", keys: ["š", "á"], name: "Krok 16: š, á", hint: "Prostředníček levé ruky na š (klávesa 3), prostředníček pravé ruky na á (klávesa 8).", texts: ["ššš ááá šá áš máš váš šaty", "ššš ááá šá áš máš váš šaty ššš ááá šá áš máš váš šaty", "ššš ááá šá áš máš váš šaty ššš ááá šá áš máš váš šaty ššš ááá šá áš máš váš šaty"] },
+  { id: "beg17", keys: ["č", "ž"], name: "Krok 17: č, ž", hint: "Ukazováček levé ruky na č (klávesa 4), ukazováček pravé ruky na ž (klávesa 6).", texts: ["ččč žžž čž žč čas žena kočka", "ččč žžž čž žč čas žena kočka ččč žžž čž žč čas žena kočka", "ččč žžž čž žč čas žena kočka ččč žžž čž žč čas žena kočka ččč žžž čž žč čas žena kočka"] },
+  { id: "beg18", keys: ["ř", "ý"], name: "Krok 18: ř, ý", hint: "Ukazováček levé ruky natáhni na ř (klávesa 5), ukazováček pravé ruky natáhni na ý (klávesa 7).", texts: ["řřř ýýý řý ýř řeka starý dobrý", "řřř ýýý řý ýř řeka starý dobrý řřř ýýý řý ýř řeka starý dobrý", "řřř ýýý řý ýř řeka starý dobrý řřř ýýý řý ýř řeka starý dobrý řřř ýýý řý ýř řeka starý dobrý"] },
+  { id: "beg19", keys: ["é"], name: "Krok 19: é", hint: "Malíček pravé ruky na é (klávesa 0).", texts: ["ééé malé dobré", "ééé malé dobré ééé malé dobré", "ééé malé dobré ééé malé dobré ééé malé dobré"] },
+  { id: "beg20", keys: ["ů", "ú"], name: "Krok 20: ů, ú — hotovo!", hint: "Malíček pravé ruky na ů (vedle L) a na ú (vedle P). Gratulujeme, teď umíš úplně celou klávesnici!", texts: ["ůůů úúú růže úkol", "ůůů úúú růže úkol ůůů úúú růže úkol", "ůůů úúú růže úkol ůůů úúú růže úkol ůůů úúú růže úkol"] },
 ];
 const LESSONS = [
   { id: "home", name: "Základní řádek", texts: [
-    "asdf jklö sad dal had jak lak hlas hala sklad kladla skladal hlas sklad",
+    "asdf jklů sad dal had jak lak hlas hala sklad kladla skladal hlas sklad",
     "jak dal hlas sklad hala sad had lak kladla skladal dal sad had",
-    "hlas hala sklad kladla skladal sad dal had jak lak asdf jklö",
-    "fjfj dkdk slsl asdf jklö sad had jak lak dal hlas hala",
-    "asdf jklö dal sad had jak lak sklad hala hlas skladal kladla lhal",
-    "jklö asdf lak jak had sad dal hlas hala sklad kladla skladal lhal",
-    "sklad kladla skladal lhal hlas hala sad dal had jak lak asdf jklö",
-    "hlas hala lhal sklad kladla skladal asdf jklö sad dal had jak lak"
+    "hlas hala sklad kladla skladal sad dal had jak lak asdf jklů",
+    "fjfj dkdk slsl asdf jklů sad had jak lak dal hlas hala",
+    "asdf jklů dal sad had jak lak sklad hala hlas skladal kladla lhal",
+    "jklů asdf lak jak had sad dal hlas hala sklad kladla skladal lhal",
+    "sklad kladla skladal lhal hlas hala sad dal had jak lak asdf jklů",
+    "hlas hala lhal sklad kladla skladal asdf jklů sad dal had jak lak"
   ]},
   { id: "top", name: "Horní řádek", texts: [
     "dopisy a fotografie ukládá do starého kufru a hledá tajný poklad ve staré skříni",
@@ -2865,7 +2884,8 @@ const FINGER_NAMES = {
   ri: "pravý ukazováček", rm: "pravý prostředníček", rr: "pravý prsteníček", rp: "pravý malíček", thumb: "palec"
 };
 function fingerForKey(ch) {
-  for (const row of ROWS) { const found = row.find(([k]) => k === ch); if (found) return found[1]; }
+  const target = resolveKeyTarget(ch);
+  for (const row of ROWS) { const found = row.find(([k]) => k === target); if (found) return found[1]; }
   return null;
 }
 function showFingerGuide(stage) {
@@ -2888,11 +2908,13 @@ function showFingerGuide(stage) {
   });
 }
 function miniKeyboardHtml(targetKeys) {
-  const set = new Set(targetKeys.map(k => k.toLowerCase()));
-  return '<div class="beg-mini-kb">' + ROWS.slice(1).map(row =>
+  const set = new Set(targetKeys.map(k => resolveKeyTarget(k.toLowerCase())));
+  const needsRow0 = ROWS[0].some(([ch]) => set.has(ch));
+  const rows = needsRow0 ? ROWS : ROWS.slice(1);
+  return '<div class="beg-mini-kb">' + rows.map(row =>
     '<div class="beg-mini-krow">' + row.map(([ch, fg]) => {
       const isHit = set.has(ch);
-      return '<span class="beg-mini-key' + (isHit ? ' hit f-' + fg : '') + '">' + ch + '</span>';
+      return '<span class="beg-mini-key' + (isHit ? ' hit f-' + fg : '') + '">' + keyLabel(ch) + '</span>';
     }).join("") + '</div>'
   ).join("") + '</div>';
 }
