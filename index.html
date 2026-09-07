@@ -846,6 +846,7 @@
       <button class="btn-ghost" id="exportPdfBtn">Export PDF</button>
       <button class="btn-icon-danger" id="deleteClassBtn" title="Smazat třídu">🗑</button>
     </div>
+    <button class="btn-ghost" id="leaveClassDetailBtn" style="display:none; width:auto; padding:8px 14px; margin-bottom:14px;">Opustit třídu</button>
     <div id="classAssignmentsBox" style="margin:18px 0;"></div>
     <div id="classRosterTable"></div>
   </div>
@@ -1708,7 +1709,8 @@ async function recordResult({ cpm, acc, lessonId, isRace, won, textLength, timeM
       cpm: lc ? Math.round((profile.sumCpm || 0) / lc) : 0,
       acc: lc ? Math.round((profile.sumAcc || 0) / lc) : 0,
       lessonsCompleted: lc,
-      xp: profile.xp || 0
+      xp: profile.xp || 0,
+      lastActiveAt: Date.now()
     }).catch(() => {});
     checkClassAssignments(profile, ctx);
   }
@@ -1977,6 +1979,17 @@ function randomClassCode() {
   for (let i = 0; i < 6; i++) code += chars[Math.floor(Math.random() * chars.length)];
   return code;
 }
+async function leaveCurrentClass(profile) {
+  const ok = await showConfirm("Opustit třídu?", "Učitel tě přestane vidět v přehledu výsledků a ztratíš přístup k úkolům třídy.");
+  if (!ok) return false;
+  try { await fbdb.ref("classes/" + profile.classId + "/members/" + currentUser.uid).remove(); } catch (e) {}
+  delete profile.classId;
+  delete profile.className;
+  await saveProfile(profile);
+  watchClassRace(profile);
+  watchNotifications(profile);
+  return true;
+}
 async function renderClassSection(profile) {
   const joinBox = document.getElementById("joinClassBox");
   const myClassBox = document.getElementById("myClassBox");
@@ -1995,20 +2008,26 @@ async function renderClassSection(profile) {
   }
   document.getElementById("createClassBtn").style.display = "";
   if (profile.classId) {
+    // sebe-oprava: pokud uz uroste neni clenem (ucitel ho odebral), lokalne to zjistime a uklidime
+    let stillMember = true;
+    try {
+      const memSnap = await fbdb.ref("classes/" + profile.classId + "/members/" + currentUser.uid).get();
+      stillMember = memSnap.exists();
+    } catch (e) { stillMember = false; }
+    if (!stillMember) {
+      delete profile.classId;
+      delete profile.className;
+      await saveProfile(profile);
+    }
+  }
+  if (profile.classId) {
     joinBox.style.display = "none";
     myClassBox.style.display = "";
     myClassBox.innerHTML = "Jsi ve třídě: <strong>" + (profile.className || profile.classId) + "</strong><br><div style=\"display:flex; gap:8px; margin-top:8px;\"><button class=\"btn-secondary\" id=\"viewClassBtn\" style=\"margin-bottom:0; padding:6px 12px; font-size:12.5px;\">Zobrazit třídu</button><button class=\"btn-secondary\" id=\"leaveClassBtn\" style=\"margin-bottom:0; padding:6px 12px; font-size:12.5px;\">Opustit třídu</button></div>";
     document.getElementById("viewClassBtn").addEventListener("click", () => openClassDetail(profile.classId, profile.className || "Třída"));
     document.getElementById("leaveClassBtn").addEventListener("click", async () => {
-      const ok = await showConfirm("Opustit třídu?", "Učitel tě přestane vidět v přehledu výsledků.");
-      if (!ok) return;
-      try { await fbdb.ref("classes/" + profile.classId + "/members/" + currentUser.uid).remove(); } catch (e) {}
-      delete profile.classId;
-      delete profile.className;
-      await saveProfile(profile);
-      renderClassSection(profile);
-      watchClassRace(profile);
-      watchNotifications(profile);
+      const left = await leaveCurrentClass(profile);
+      if (left) renderClassSection(profile);
     });
   } else {
     joinBox.style.display = "";
@@ -2085,6 +2104,7 @@ document.getElementById("joinClassBtn").addEventListener("click", async () => {
 });
 let currentClassDetailId = null;
 let currentClassInviteCode = null;
+let currentClassAssignments = {};
 function pluralZaci(n) {
   if (n === 1) return n + " žák";
   if (n >= 2 && n <= 4) return n + " žáci";
@@ -2101,8 +2121,11 @@ async function openClassDetail(classId, className) {
     const snap = await fbdb.ref("classes/" + classId).get();
     const data = snap.val() || {};
     const isOwner = !!(currentUser && data.ownerUid === currentUser.uid);
+    const isMember = !!(currentUser && data.members && data.members[currentUser.uid]);
     currentClassInviteCode = data.inviteCode || null;
+    currentClassAssignments = data.assignments || {};
     document.getElementById("classActionsBar").style.display = isOwner ? "" : "none";
+    document.getElementById("leaveClassDetailBtn").style.display = (!isOwner && isMember) ? "" : "none";
     if (isOwner) {
       const codeEl = document.getElementById("classDetailCode");
       codeEl.textContent = data.inviteCode || "—";
@@ -2110,7 +2133,7 @@ async function openClassDetail(classId, className) {
     }
     updateClassRaceSelect(isOwner, data.assignments || {});
     const members = data.members || {};
-    const rows = Object.values(members).sort((a, b) => (b.xp || 0) - (a.xp || 0));
+    const rows = Object.keys(members).map(uid => Object.assign({ uid: uid }, members[uid])).sort((a, b) => (b.xp || 0) - (a.xp || 0));
     renderClassAssignments(classId, isOwner, data.assignments || {}, Object.keys(members).length);
     document.getElementById("classDetailCount").textContent = pluralZaci(rows.length);
     const tableEl = document.getElementById("classRosterTable");
@@ -2121,7 +2144,11 @@ async function openClassDetail(classId, className) {
         rows.map((m, i) => '<tr data-ridx="' + i + '" style="cursor:pointer;"><td>' + (m.name || "—") + '</td><td>' + Math.round(m.cpm || 0) + '</td><td>' + Math.round(m.acc || 0) + '%</td><td>' + (m.lessonsCompleted || 0) + '</td><td>' + (m.xp || 0) + '</td></tr>').join("") +
         '</tbody></table>';
       tableEl.querySelectorAll("[data-ridx]").forEach(tr => {
-        tr.addEventListener("click", () => showPublicProfile(rows[parseInt(tr.dataset.ridx, 10)]));
+        tr.addEventListener("click", () => {
+          const m = rows[parseInt(tr.dataset.ridx, 10)];
+          if (isOwner) showStudentDetailModal(classId, m.uid, m, currentClassAssignments);
+          else showPublicProfile(m);
+        });
       });
     }
     window._currentClassRows = rows;
@@ -2387,6 +2414,67 @@ document.getElementById("deleteClassBtn").addEventListener("click", async () => 
     showToast("Třídu se nepodařilo smazat, zkus to znovu.");
   }
 });
+document.getElementById("leaveClassDetailBtn").addEventListener("click", async () => {
+  const profile = await loadProfile();
+  if (!profile.classId) { show("school"); return; }
+  const left = await leaveCurrentClass(profile);
+  if (left) { showToast("Opustil/a jsi třídu"); show("school"); }
+});
+function studentAssignmentRowHtml(a, uid) {
+  const st = assignmentStatus(a, uid);
+  return '<div class="notif-item"><div class="ni-text">' + (a.label || (ASSIGNMENT_TYPES[a.type] ? ASSIGNMENT_TYPES[a.type].name : a.type))
+    + '<div class="ni-sub">' + assignmentDesc(a) + '</div></div>'
+    + '<span class="assign-status ' + st.cls + '">' + st.text + '</span></div>';
+}
+function showStudentDetailModal(classId, uid, member, assignments) {
+  const overlay = document.createElement("div");
+  overlay.className = "levelup-overlay";
+  const avatarHtml = avatarInner(member);
+  const lastActive = member.lastActiveAt ? formatDeadline(member.lastActiveAt)
+    : (member.joinedAt ? "zatím necvičil/a" : "—");
+  const list = Object.keys(assignments || {}).map(id => Object.assign({ id: id }, assignments[id]))
+    .sort((a, b) => (a.createdAt || 0) - (b.createdAt || 0));
+  const assignHtml = list.length
+    ? list.map(a => studentAssignmentRowHtml(a, uid)).join("")
+    : '<div class="notif-list-empty">Třída zatím nemá žádné úkoly.</div>';
+  overlay.innerHTML = '<div class="levelup-card form-card" style="cursor:default; width:100%; max-width:420px; text-align:left;">'
+    + '<div style="display:flex; align-items:center; gap:12px; margin-bottom:2px;">'
+    + '<div style="width:48px; height:48px; border-radius:50%; overflow:hidden; flex-shrink:0; background:#2a2a2f; display:flex; align-items:center; justify-content:center; font-size:22px;">' + avatarHtml + '</div>'
+    + '<div style="min-width:0;"><p class="lu-title" style="margin:0; font-size:18px;">' + (member.name || "Žák") + '</p>'
+    + '<p class="hint" style="margin:2px 0 0; text-align:left;">Aktivní: ' + lastActive + '</p></div>'
+    + '</div>'
+    + '<p class="hint" style="text-align:left; margin:10px 0 0;">Ø ' + Math.round(member.cpm || 0) + ' zn/min · ' + Math.round(member.acc || 0) + '% přesnost</p>'
+    + '<p class="lb-title" style="margin:16px 0 8px; font-size:13px;">Úkoly</p>'
+    + '<div id="studentAssignList">' + assignHtml + '</div>'
+    + '<div style="display:flex; gap:8px; margin-top:16px;">'
+    + '<button class="btn-secondary" id="resetStudentStatsBtn" style="margin-bottom:0; flex:1;">Vynulovat statistiky</button>'
+    + '<button class="btn-icon-danger" id="removeStudentBtn" title="Odebrat ze třídy">🗑</button>'
+    + '</div></div>';
+  document.body.appendChild(overlay);
+  overlay.addEventListener("click", (e) => { if (e.target === overlay) overlay.remove(); });
+  overlay.querySelector("#removeStudentBtn").addEventListener("click", async (e) => {
+    e.stopPropagation();
+    const ok = await showConfirm("Odebrat žáka ze třídy?", (member.name || "Žák") + " ztratí přístup k úkolům téhle třídy. Jeho vlastní postup a XP mimo třídu zůstanou zachovány.");
+    if (!ok) return;
+    try {
+      await fbdb.ref("classes/" + classId + "/members/" + uid).remove();
+      showToast("Žák odebrán ze třídy");
+      overlay.remove();
+      openClassDetail(classId, document.getElementById("classDetailTitle").textContent);
+    } catch (e) { showToast("Nepodařilo se odebrat žáka, zkus to znovu."); }
+  });
+  overlay.querySelector("#resetStudentStatsBtn").addEventListener("click", async (e) => {
+    e.stopPropagation();
+    const ok = await showConfirm("Vynulovat statistiky žáka?", "Vynuluje se jeho zn/min, přesnost, počet lekcí a XP zobrazené v téhle třídě. Postup mimo třídu se nezmění.");
+    if (!ok) return;
+    try {
+      await fbdb.ref("classes/" + classId + "/members/" + uid).update({ cpm: 0, acc: 0, lessonsCompleted: 0, xp: 0 });
+      showToast("Statistiky vynulovány");
+      overlay.remove();
+      openClassDetail(classId, document.getElementById("classDetailTitle").textContent);
+    } catch (e) { showToast("Nepodařilo se vynulovat statistiky, zkus to znovu."); }
+  });
+}
 function renderQuests(dailyQuests) {
   const el = document.getElementById("questList");
   if (!el) return;
