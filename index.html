@@ -1620,8 +1620,8 @@ function askRole() {
       + '<p class="lu-title" style="font-size:19px;">Jsi učitel, nebo žák?</p>'
       + '<p class="lu-sub" style="margin-bottom:16px;">Podle toho ti připravíme správné nástroje ve Škole / Firmě. Kdykoliv to můžeš změnit.</p>'
       + '<div class="role-cards">'
-      + '<button class="role-card" id="roleStudentBtn"><span class="role-card-icon">' + svgIcon("student", 30) + '</span><span class="role-card-label">Žák</span></button>'
-      + '<button class="role-card" id="roleTeacherBtn"><span class="role-card-icon">' + svgIcon("teacher", 30) + '</span><span class="role-card-label">Učitel</span></button>'
+      + '<button class="role-card" id="roleStudentBtn"><span class="role-card-icon">' + svgIcon("teacher", 30) + '</span><span class="role-card-label">Žák</span></button>'
+      + '<button class="role-card" id="roleTeacherBtn"><span class="role-card-icon">' + svgIcon("student", 30) + '</span><span class="role-card-label">Učitel</span></button>'
       + '</div></div>';
     document.body.appendChild(overlay);
     overlay.querySelector("#roleTeacherBtn").addEventListener("click", () => { overlay.remove(); resolve("teacher"); });
@@ -2815,7 +2815,8 @@ function getBackTargetFor(screenId) {
   const linkEl = document.querySelector("#screen-" + screenId + " [data-back]");
   return (linkEl && linkEl.dataset.back) || "home";
 }
-function show(id) {
+function show(id, opts) {
+  document.querySelectorAll(".levelup-overlay").forEach(o => o.remove());
   currentScreenId = id;
   ["home","lessons","beginner","solo","solo-done","race-home","lobby","countdown","race","results","profile","school","class-detail"].forEach(s => {
     document.getElementById("screen-" + s).style.display = (s === id) ? "" : "none";
@@ -2828,8 +2829,12 @@ function show(id) {
   if (id === "profile") loadHomeProfile();
   if (id === "school") loadProfile().then(renderClassSection);
   if (id === "beginner") renderBeginnerList();
-  if (!suppressHistoryPush && window.location.hash !== "#" + id) {
-    history.pushState({ screen: id }, "", "#" + id);
+  if (!suppressHistoryPush) {
+    if (opts && opts.replace) {
+      history.replaceState({ screen: id }, "", "#" + id);
+    } else if (window.location.hash !== "#" + id) {
+      history.pushState({ screen: id }, "", "#" + id);
+    }
   }
 }
 window.addEventListener("popstate", (e) => {
@@ -3009,7 +3014,7 @@ function startSolo(lesson, text, beginnerLevel) {
         }
         }
       }
-      setTimeout(() => show("solo-done"), 650);
+      setTimeout(() => show("solo-done", { replace: true }), 650);
     }
   });
   const input = document.getElementById("typeInput");
@@ -3570,7 +3575,7 @@ async function finishRace(state) {
   if (state.finished) submitToLeaderboard((cachedProfile && cachedProfile.nickname) || playerName || "Anonym", wpm, acc);
   if (state.finished) recordResult({ cpm: wpm, acc, lessonId: "race", isRace: true, won: false, textLength: state.text.length, timeMs: elapsed });
   renderResults();
-  setTimeout(() => { show("results"); startPolling(); }, 650);
+  setTimeout(() => { show("results", { replace: true }); startPolling(); }, 650);
 }
 function renderResults() {
   const list = document.getElementById("resultsList");
