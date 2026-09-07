@@ -825,6 +825,7 @@
           <p class="hint" style="margin:-6px 0 10px;">Klikni na profilovku a nahraj vlastní fotku, nebo vyber odemčenou ikonu.</p>
           <div class="avatar-picker" id="profileAvatarPicker"></div>
           <button class="btn-secondary" id="authNickBtn" style="margin-bottom:0;">Změnit přezdívku</button>
+          <div id="adminLicenseBox" style="display:none;"></div>
         </div>
     </div>
     <div class="card profile-card" id="profileStatsCard" style="display:none;">
@@ -858,6 +859,7 @@
     <p class="lb-title" style="margin-top:14px;"><svg width="18" height="18" viewBox="0 0 24 24" style="vertical-align:-2px;"><path d="M12 3l9 5-9 5-9-5 9-5z" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/><path d="M5 10.5v4c0 1.5 3 3.5 7 3.5s7-2 7-3.5v-4" fill="none" stroke="currentColor" stroke-width="2"/></svg> Škola / Firma</p>
     <p class="hint" id="schoolIntroText" style="margin:-6px 0 14px;">Založ třídu pro svoje žáky, nebo se přidej do třídy pomocí kódu od učitele.</p>
     <p class="hint" id="roleIndicator" style="display:none; text-align:left; margin:-6px 0 14px;">Režim: <strong id="roleIndicatorText" style="color:var(--tx);"></strong> · <a href="#" id="changeRoleLink" style="color:var(--accent);">změnit</a></p>
+    <div id="schoolLicenseStatusBox" style="display:none;"></div>
     <div id="joinClassGroup">
       <p class="lb-title" style="margin:0 0 8px; font-size:13px; text-align:left;">Mám kód od učitele</p>
       <div id="joinClassBox">
@@ -1411,11 +1413,14 @@ function updateAuthUI() {
 
     if (statsCard) statsCard.style.display = "";
     if (logoutBtn) logoutBtn.style.display = "";
+    renderAdminLicenseBox();
   } else {
     out.style.display = "";
     inn.style.display = "none";
     if (statsCard) statsCard.style.display = "none";
     if (logoutBtn) logoutBtn.style.display = "none";
+    const adminBox = document.getElementById("adminLicenseBox");
+    if (adminBox) { adminBox.style.display = "none"; adminBox.innerHTML = ""; }
   }
 }
 function translateAuthError(e) {
@@ -2128,6 +2133,120 @@ async function leaveCurrentClass(profile) {
   watchNotifications(profile);
   return true;
 }
+/* ---------- skolni licence (paywall pro funkce Skola/Firma) ---------- */
+const ADMIN_EMAIL = "danielhubscher97@gmail.com";
+const ADMIN_EMAILS = [ADMIN_EMAIL, "tarkosyd@gmail.com"];
+const SCHOOL_TRIAL_DAYS = 10;
+const SCHOOL_TRIAL_MS = SCHOOL_TRIAL_DAYS * 24 * 3600 * 1000;
+function isAdminUser() { return !!(currentUser && currentUser.email && ADMIN_EMAILS.includes(currentUser.email)); }
+async function ensureGrandfatheredAccess(profile) {
+  if (!profile.schoolAccess && profile.ownedClasses && Object.keys(profile.ownedClasses).length) {
+    profile.schoolAccess = { type: "grandfathered", grantedAt: Date.now() };
+    await saveProfile(profile);
+  }
+  return profile;
+}
+function schoolAccessStatus(profile) {
+  const a = profile.schoolAccess;
+  if (!a) return { ok: false, type: "none" };
+  if (a.type === "grandfathered" || a.type === "licensed") return { ok: true, type: a.type };
+  if (a.type === "trial") {
+    const remaining = a.expiresAt - Date.now();
+    if (remaining > 0) return { ok: true, type: "trial", expiresAt: a.expiresAt, daysLeft: Math.max(1, Math.ceil(remaining / 86400000)) };
+    return { ok: false, type: "trial_expired", expiresAt: a.expiresAt };
+  }
+  return { ok: false, type: "none" };
+}
+async function redeemLicenseCode(profile, rawCode) {
+  const code = (rawCode || "").trim().toUpperCase();
+  if (!code) return { ok: false, message: "Zadej licenční kód." };
+  if (!currentUser) return { ok: false, message: "Pro aktivaci licence se musíš přihlásit." };
+  try {
+    const snap = await fbdb.ref("schoolLicenses/" + code).get();
+    if (!snap.exists()) return { ok: false, message: "Tenhle kód neexistuje. Zkontroluj, jestli je správně opsaný." };
+    const lic = snap.val();
+    if (lic.redeemedBy && lic.redeemedBy !== currentUser.uid) return { ok: false, message: "Tenhle kód už je použitý." };
+    if (!lic.redeemedBy) {
+      await fbdb.ref("schoolLicenses/" + code).update({ redeemedBy: currentUser.uid, redeemedAt: Date.now() });
+    }
+    profile.schoolAccess = { type: "licensed", code: code, activatedAt: Date.now() };
+    await saveProfile(profile);
+    return { ok: true };
+  } catch (e) { return { ok: false, message: "Kód se nepodařilo ověřit, zkus to znovu." }; }
+}
+async function generateLicenseCode(schoolName) {
+  const code = "SKOLA-" + Math.random().toString(36).slice(2, 6).toUpperCase() + "-" + Math.random().toString(36).slice(2, 6).toUpperCase();
+  await fbdb.ref("schoolLicenses/" + code).set({ schoolName: schoolName || "", createdAt: Date.now(), redeemedBy: null, redeemedAt: null });
+  return code;
+}
+function pluralDni(n) { return n === 1 ? "den" : (n >= 2 && n <= 4 ? "dny" : "dní"); }
+function schoolLicenseStatusHtml(status) {
+  if (status.type === "grandfathered") return "";
+  if (status.type === "licensed") return '<div class="hint" style="text-align:left; margin:0 0 12px; color:#4caf82;">Licence pro školu je aktivní ✓</div>';
+  if (status.type === "trial") return '<div class="hint" style="text-align:left; margin:0 0 12px;">Zkušební verze funkcí pro školu — zbývá ' + status.daysLeft + ' ' + pluralDni(status.daysLeft) + '.</div>';
+  if (status.type === "trial_expired") return '<div class="hint" style="text-align:left; margin:0 0 12px; color:#ff6b6b;">Zkušební verze vypršela — pro další úkoly a třídy je potřeba licence.</div>';
+  return "";
+}
+function showSchoolPaywall(profile) {
+  const overlay = document.createElement("div");
+  overlay.className = "levelup-overlay";
+  const status = schoolAccessStatus(profile);
+  const introMsg = status.type === "trial_expired"
+    ? "Tvoje " + SCHOOL_TRIAL_DAYS + "denní zkušební verze funkcí pro školu vypršela."
+    : "Zakládání dalších tříd a úkolů je součástí placené licence pro školy.";
+  overlay.innerHTML = '<div class="levelup-card form-card" style="cursor:default; max-width:380px;">'
+    + '<div class="lu-icon">🏫</div>'
+    + '<p class="lu-title" style="font-size:19px;">Funkce pro školu</p>'
+    + '<p class="lu-sub" style="margin-bottom:14px; text-align:left; line-height:1.5;">' + introMsg + ' Napiš na <a href="mailto:' + ADMIN_EMAIL + '?subject=Licence%20pro%20%C5%A1kolu" style="color:var(--accent);">' + ADMIN_EMAIL + '</a> a domluvíme licenci pro tvou školu.</p>'
+    + '<input type="text" id="schoolLicenseInput" placeholder="Máš licenční kód? Zadej ho sem" style="text-align:center; margin-bottom:8px;">'
+    + '<p class="hint" id="schoolLicenseErr" style="display:none; color:#ff6b6b; margin:0 0 8px;"></p>'
+    + '<button class="btn-primary" id="schoolLicenseSubmit" style="margin-bottom:8px;">Aktivovat kód</button>'
+    + '<button class="btn-secondary" id="schoolPaywallClose" style="margin-bottom:0;">Zavřít</button>'
+    + '</div>';
+  document.body.appendChild(overlay);
+  overlay.querySelector("#schoolPaywallClose").addEventListener("click", () => overlay.remove());
+  overlay.querySelector("#schoolLicenseSubmit").addEventListener("click", async () => {
+    const input = overlay.querySelector("#schoolLicenseInput");
+    const errEl = overlay.querySelector("#schoolLicenseErr");
+    const res = await redeemLicenseCode(profile, input.value);
+    if (!res.ok) { errEl.textContent = res.message; errEl.style.display = ""; return; }
+    overlay.remove();
+    showToast("Licence aktivována!");
+    renderClassSection(profile);
+  });
+  overlay.querySelector("#schoolLicenseInput").addEventListener("keydown", (e) => { if (e.key === "Enter") overlay.querySelector("#schoolLicenseSubmit").click(); });
+}
+async function renderAdminLicenseList() {
+  const listEl = document.getElementById("adminLicenseList");
+  if (!listEl) return;
+  try {
+    const snap = await fbdb.ref("schoolLicenses").get();
+    const all = snap.val() || {};
+    const codes = Object.keys(all).sort((a, b) => (all[b].createdAt || 0) - (all[a].createdAt || 0));
+    listEl.innerHTML = codes.length ? codes.map(code => {
+      const l = all[code];
+      const status = l.redeemedBy ? "použitý" : "volný";
+      return '<div class="lesson-row static-row"><span class="name">' + code + (l.schoolName ? ' <span class="hint">(' + l.schoolName + ')</span>' : '') + '</span><span class="best">' + status + '</span></div>';
+    }).join("") : '<p class="hint">Zatím žádné kódy.</p>';
+  } catch (e) { listEl.innerHTML = '<p class="hint">Kódy se nepodařilo načíst.</p>'; }
+}
+function renderAdminLicenseBox() {
+  const box = document.getElementById("adminLicenseBox");
+  if (!box) return;
+  if (!isAdminUser()) { box.style.display = "none"; box.innerHTML = ""; return; }
+  box.style.display = "";
+  box.innerHTML = '<p class="lb-title" style="margin:14px 0 10px;">' + svgIcon("target", 18) + ' Licence pro školy (admin)</p>'
+    + '<div style="display:flex; gap:8px;"><input type="text" id="adminLicenseSchoolName" placeholder="Název školy (nepovinné)" style="flex:1;"><button class="btn-secondary btn-compact" id="adminGenLicenseBtn" style="margin-bottom:0;">+ Vygenerovat kód</button></div>'
+    + '<div id="adminLicenseList" style="margin-top:10px;"></div>';
+  document.getElementById("adminGenLicenseBtn").addEventListener("click", async () => {
+    const nameInput = document.getElementById("adminLicenseSchoolName");
+    const code = await generateLicenseCode(nameInput.value.trim());
+    nameInput.value = "";
+    showToast("Kód vygenerován: " + code);
+    renderAdminLicenseList();
+  });
+  renderAdminLicenseList();
+}
 async function renderClassSection(profile) {
   const joinBox = document.getElementById("joinClassGroup");
   const myClassBox = document.getElementById("myClassBox");
@@ -2167,6 +2286,19 @@ async function renderClassSection(profile) {
     };
   }
   document.getElementById("createClassBtn").style.display = "";
+  const licenseBox = document.getElementById("schoolLicenseStatusBox");
+  if (licenseBox) {
+    if (isTeacherRole) {
+      await ensureGrandfatheredAccess(profile);
+      const status = schoolAccessStatus(profile);
+      const html = schoolLicenseStatusHtml(status);
+      licenseBox.innerHTML = html;
+      licenseBox.style.display = html ? "" : "none";
+    } else {
+      licenseBox.style.display = "none";
+      licenseBox.innerHTML = "";
+    }
+  }
   if (profile.classId) {
     // sebe-oprava: pokud uz uroste neni clenem (ucitel ho odebral), lokalne to zjistime a uklidime
     let stillMember = true;
@@ -2217,6 +2349,23 @@ async function renderClassSection(profile) {
 }
 document.getElementById("createClassBtn").addEventListener("click", async () => {
   if (!currentUser) return;
+  let profile = await loadProfile();
+  await ensureGrandfatheredAccess(profile);
+  let status = schoolAccessStatus(profile);
+  let startedTrial = false;
+  if (!status.ok) {
+    const hasAnyClass = profile.ownedClasses && Object.keys(profile.ownedClasses).length;
+    if (status.type === "none" && !hasAnyClass) {
+      // uplne prvni trida ucitele - automaticky spustit zkusebni verzi bez nutnosti kodu
+      profile.schoolAccess = { type: "trial", startedAt: Date.now(), expiresAt: Date.now() + SCHOOL_TRIAL_MS };
+      await saveProfile(profile);
+      status = schoolAccessStatus(profile);
+      startedTrial = true;
+    } else {
+      showSchoolPaywall(profile);
+      return;
+    }
+  }
   const name = await askText("🏫", "Jak se bude třída jmenovat?", "Uvidí to jen ty, žáci vidí jen kód.", "Např. 8.B – informatika");
   if (!name) return;
   const classId = fbdb.ref("classes").push().key;
@@ -2226,12 +2375,14 @@ document.getElementById("createClassBtn").addEventListener("click", async () => 
       name, ownerUid: currentUser.uid, createdAt: Date.now(), inviteCode: code, members: {}
     });
     await fbdb.ref("classInvites/" + code).set({ classId, name, ownerUid: currentUser.uid });
-    const profile = await loadProfile();
+    profile = await loadProfile();
     profile.ownedClasses = profile.ownedClasses || {};
     profile.ownedClasses[classId] = name;
     await saveProfile(profile);
     renderClassSection(profile);
-    showToast("Třída „" + name + "“ založena — kód: " + code);
+    showToast(startedTrial
+      ? "Třída založena — spuštěna " + SCHOOL_TRIAL_DAYS + "denní zkušební verze. Kód: " + code
+      : "Třída „" + name + "“ založena — kód: " + code);
   } catch (e) {
     showToast("Třídu se nepodařilo založit, zkus to znovu.");
   }
@@ -2429,8 +2580,14 @@ function renderClassAssignments(classId, isOwner, assignments, memberCount) {
     });
   }
 }
-function showAssignmentDialog(classId, existing) {
+async function showAssignmentDialog(classId, existing) {
   const isEdit = !!existing;
+  if (!isEdit) {
+    const gateProfile = await loadProfile();
+    await ensureGrandfatheredAccess(gateProfile);
+    const gateStatus = schoolAccessStatus(gateProfile);
+    if (!gateStatus.ok) { showSchoolPaywall(gateProfile); return; }
+  }
   const overlay = document.createElement("div");
   overlay.className = "levelup-overlay";
   const begOptions = BEGINNER_STAGES.map(s => '<option value="' + s.id + '">' + s.name + '</option>').join("");
