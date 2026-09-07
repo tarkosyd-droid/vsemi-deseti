@@ -236,6 +236,18 @@
   }
   .empty-box .eb-icon { color: var(--tx2); margin-bottom: 8px; display: flex; justify-content: center; }
   .empty-box p { margin: 0; font-size: 13px; color: var(--tx2); line-height: 1.5; }
+  .role-cards { display: flex; gap: 12px; }
+  .role-card {
+    flex: 1; display: flex; flex-direction: column; align-items: center; gap: 10px;
+    padding: 22px 10px; background: #202024; border: 1px solid var(--line); border-radius: 14px;
+    color: var(--tx); transition: border-color 0.15s, transform 0.1s, background 0.15s;
+  }
+  .role-card:hover { border-color: var(--accent2); background: #26262b; transform: translateY(-2px); }
+  .role-card-icon {
+    width: 52px; height: 52px; border-radius: 50%; background: #2a2a2f;
+    display: flex; align-items: center; justify-content: center; color: var(--accent2);
+  }
+  .role-card-label { font-weight: 700; font-size: 14px; }
   .code-display {
     text-align: center; font-family: 'JetBrains Mono', monospace; font-size: 38px; font-weight: 700; letter-spacing: 8px;
     background: #1c1c20; border: 1px solid var(--line); border-radius: 12px; padding: 16px; margin-bottom: 16px;
@@ -1290,6 +1302,8 @@ const ICON_PATHS = {
   medalGold: '<circle cx="12" cy="9" r="6.5" fill="#ffce54"/><path d="M9 14l-3.2 7.3L12 18l6.2 3.3L15 14" fill="#ffce54"/>',
   medalSilver: '<circle cx="12" cy="9" r="6.5" fill="#c7cbd6"/><path d="M9 14l-3.2 7.3L12 18l6.2 3.3L15 14" fill="#c7cbd6"/>',
   medalBronze: '<circle cx="12" cy="9" r="6.5" fill="#d08a52"/><path d="M9 14l-3.2 7.3L12 18l6.2 3.3L15 14" fill="#d08a52"/>',
+  student: '<circle cx="12" cy="8" r="4" fill="none" stroke="currentColor" stroke-width="2"/><path d="M5 20c0-4 3-6 7-6s7 2 7 6" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>',
+  teacher: '<circle cx="12" cy="8" r="4" fill="none" stroke="currentColor" stroke-width="2"/><path d="M5 20c0-4 3-6 7-6s7 2 7 6" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/><circle cx="9.6" cy="8" r="1.7" fill="none" stroke="currentColor" stroke-width="1.4"/><circle cx="14.4" cy="8" r="1.7" fill="none" stroke="currentColor" stroke-width="1.4"/><line x1="11.3" y1="8" x2="12.7" y2="8" stroke="currentColor" stroke-width="1.4"/><line x1="7.9" y1="7.4" x2="6.6" y2="6.6" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/>',
 };
 function svgIcon(name, size) {
   size = size || 18;
@@ -1602,13 +1616,13 @@ function askRole() {
   return new Promise((resolve) => {
     const overlay = document.createElement("div");
     overlay.className = "levelup-overlay";
-    overlay.innerHTML = '<div class="levelup-card" style="cursor:default;">'
-      + '<div class="lu-icon">🎓</div>'
-      + '<p class="lu-title">Jsi učitel, nebo žák?</p>'
-      + '<p class="lu-sub" style="margin-bottom:14px;">Podle toho ti připravíme správné nástroje ve Škole / Firmě. Kdykoliv to můžeš změnit.</p>'
-      + '<button class="btn-primary" id="roleTeacherBtn" style="margin-bottom:8px;">Jsem učitel/ka</button>'
-      + '<button class="btn-secondary" id="roleStudentBtn" style="margin-bottom:0;">Jsem žák/yně</button>'
-      + '</div>';
+    overlay.innerHTML = '<div class="levelup-card form-card" style="cursor:default; max-width:360px;">'
+      + '<p class="lu-title" style="font-size:19px;">Jsi učitel, nebo žák?</p>'
+      + '<p class="lu-sub" style="margin-bottom:16px;">Podle toho ti připravíme správné nástroje ve Škole / Firmě. Kdykoliv to můžeš změnit.</p>'
+      + '<div class="role-cards">'
+      + '<button class="role-card" id="roleStudentBtn"><span class="role-card-icon">' + svgIcon("student", 30) + '</span><span class="role-card-label">Žák</span></button>'
+      + '<button class="role-card" id="roleTeacherBtn"><span class="role-card-icon">' + svgIcon("teacher", 30) + '</span><span class="role-card-label">Učitel</span></button>'
+      + '</div></div>';
     document.body.appendChild(overlay);
     overlay.querySelector("#roleTeacherBtn").addEventListener("click", () => { overlay.remove(); resolve("teacher"); });
     overlay.querySelector("#roleStudentBtn").addEventListener("click", () => { overlay.remove(); resolve("student"); });
