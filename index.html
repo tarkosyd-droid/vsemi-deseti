@@ -97,6 +97,23 @@
   .mode-btn .d { font-size: 13.5px; color: var(--tx2); line-height: 1.5; margin-top: auto; }
   .mode-cta { margin-top: 14px; text-align: center; font-weight: 700; font-size: 13px; padding: 11px; border-radius: 10px; background: linear-gradient(135deg, var(--accent), var(--accent2)); color: #060714; }
   .beginner-cta { background: linear-gradient(135deg, #b06fff, #7f4fff); color: #fff; }
+  .trial-status-pill {
+    display: flex; align-items: center; justify-content: space-between; gap: 10px;
+    padding: 10px 14px; border-radius: 999px; margin: 0 0 14px;
+    background: linear-gradient(90deg, #7f4fff, #ff8a3d); color: #fff;
+    box-shadow: 0 4px 14px rgba(127,79,255,0.28);
+  }
+  .trial-status-pill.expired { background: linear-gradient(90deg, #ff4d6d, #ff8a3d); box-shadow: 0 4px 14px rgba(255,77,109,0.28); }
+  .trial-status-pill .tsp-text { font-size: 13px; font-weight: 700; line-height: 1.25; }
+  .trial-status-pill .tsp-buy {
+    flex-shrink: 0; border: none; border-radius: 999px; padding: 7px 13px; font-size: 12px; font-weight: 800;
+    background: rgba(6,7,20,0.28); color: #fff; cursor: pointer; white-space: nowrap;
+  }
+  .trial-status-pill .tsp-buy:hover { background: rgba(6,7,20,0.42); }
+  .license-active-pill {
+    display: flex; align-items: center; gap: 8px; padding: 9px 14px; border-radius: 999px; margin: 0 0 14px;
+    background: rgba(76,175,130,0.14); color: #4caf82; font-size: 13px; font-weight: 700;
+  }
   .lesson-list { display: flex; flex-direction: column; gap: 8px; }
   .lesson-row {
     display: flex; justify-content: space-between; align-items: center;
@@ -2222,9 +2239,15 @@ async function generateLicenseCode(schoolName) {
 function pluralDni(n) { return n === 1 ? "den" : (n >= 2 && n <= 4 ? "dny" : "dní"); }
 function schoolLicenseStatusHtml(status) {
   if (status.type === "grandfathered") return "";
-  if (status.type === "licensed") return '<div class="hint" style="text-align:left; margin:0 0 12px; color:#4caf82;">Licence pro školu je aktivní ✓</div>';
-  if (status.type === "trial") return '<div class="hint" style="text-align:left; margin:0 0 12px;">Zkušební verze funkcí pro školu — zbývá ' + status.daysLeft + ' ' + pluralDni(status.daysLeft) + '.</div>';
-  if (status.type === "trial_expired") return '<div class="hint" style="text-align:left; margin:0 0 12px; color:#ff6b6b;">Zkušební verze vypršela — pro další úkoly a třídy je potřeba licence.</div>';
+  if (status.type === "licensed") return '<div class="license-active-pill">✓ Licence pro školu je aktivní</div>';
+  if (status.type === "trial") return '<div class="trial-status-pill" id="trialStatusPill">'
+    + '<span class="tsp-text">⏳ Zkušební verze: zbývá ' + status.daysLeft + ' ' + pluralDni(status.daysLeft) + '</span>'
+    + '<button class="tsp-buy" id="trialStatusBuyBtn">Koupit licenci →</button>'
+    + '</div>';
+  if (status.type === "trial_expired") return '<div class="trial-status-pill expired" id="trialStatusPill">'
+    + '<span class="tsp-text">⚠️ Zkušební verze vypršela</span>'
+    + '<button class="tsp-buy" id="trialStatusBuyBtn">Koupit licenci →</button>'
+    + '</div>';
   return "";
 }
 function showSchoolPaywall(profile) {
@@ -2336,6 +2359,8 @@ async function renderClassSection(profile) {
       const html = schoolLicenseStatusHtml(status);
       licenseBox.innerHTML = html;
       licenseBox.style.display = html ? "" : "none";
+      const trialBuyBtn = document.getElementById("trialStatusBuyBtn");
+      if (trialBuyBtn) trialBuyBtn.addEventListener("click", () => showSchoolPaywall(profile));
       refreshTrialNotifState(profile);
     } else {
       licenseBox.style.display = "none";
