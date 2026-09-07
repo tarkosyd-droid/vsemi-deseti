@@ -1982,7 +1982,7 @@ async function renderFriendsList(profile) {
       + '<div class="friend-avatar">' + avatar + '</div>'
       + '<div class="friend-info"><div class="friend-name">' + nameOf(k) + '</div><div class="friend-sub">' + sub + '</div></div>'
       + '<div class="friend-actions">'
-      + '<span class="friend-action-btn" title="Založit závod" data-invite-friend="1">' + svgIcon("flagicon", 15) + '</span>'
+      + '<span class="friend-action-btn" title="Založit závod" data-invite-friend="' + k + '">' + svgIcon("flagicon", 15) + '</span>'
       + '<span class="friend-remove" data-friend-key="' + k + '" title="Odebrat">✕</span>'
       + '</div></div>';
   }).join("");
@@ -2011,7 +2011,20 @@ async function renderFriendsList(profile) {
     });
   });
   el.querySelectorAll("[data-invite-friend]").forEach(btn => {
-    btn.addEventListener("click", (e) => { e.stopPropagation(); show("race-home"); });
+    btn.addEventListener("click", async (e) => {
+      e.stopPropagation();
+      if (!currentUser) { show("race-home"); return; }
+      const toUid = btn.dataset.inviteFriend;
+      const ok = await createLobbyAsHost();
+      if (!ok) { showToast("Lobby se nepodařilo vytvořit, zkus to znovu."); return; }
+      fbdb.ref("raceInvites/" + toUid + "/i" + Math.random().toString(36).slice(2, 10)).set({
+        fromUid: currentUser.uid,
+        fromName: (cachedProfile && cachedProfile.nickname) || playerName || "Hráč",
+        code: lobbyCode, createdAt: Date.now()
+      }).catch(() => {});
+      showToast("Pozvánka odeslána");
+      enterLobbyScreen();
+    });
   });
 }
 async function claimUsername(uid, nickname) {
@@ -2575,8 +2588,15 @@ document.getElementById("deleteClassBtn").addEventListener("click", async () => 
   const ok = await showConfirm("Smazat třídu „" + title + "“?", "Nenávratně se smaže i pozvánkový kód. Žáci ve třídě ztratí svoje zařazení.");
   if (!ok) return;
   try {
+    const membersSnap = await fbdb.ref("classes/" + currentClassDetailId + "/members").get().catch(() => null);
+    const memberUids = membersSnap && membersSnap.exists() ? Object.keys(membersSnap.val()) : [];
     if (currentClassInviteCode) await fbdb.ref("classInvites/" + currentClassInviteCode).remove().catch(() => {});
     await fbdb.ref("classes/" + currentClassDetailId).remove();
+    memberUids.forEach(mUid => {
+      fbdb.ref("classKicks/" + mUid + "/k" + Math.random().toString(36).slice(2, 10)).set({
+        classId: currentClassDetailId, className: title, at: Date.now(), deleted: true
+      }).catch(() => {});
+    });
     const profile = await loadProfile();
     if (profile.ownedClasses) delete profile.ownedClasses[currentClassDetailId];
     await saveProfile(profile);
@@ -2631,8 +2651,12 @@ function showStudentDetailModal(classId, uid, member, assignments) {
     e.stopPropagation();
     const ok = await showConfirm("Odebrat žáka ze třídy?", (member.name || "Žák") + " ztratí přístup k úkolům téhle třídy. Jeho vlastní postup a XP mimo třídu zůstanou zachovány.");
     if (!ok) return;
+    const className = document.getElementById("classDetailTitle").textContent;
     try {
       await fbdb.ref("classes/" + classId + "/members/" + uid).remove();
+      fbdb.ref("classKicks/" + uid + "/k" + Math.random().toString(36).slice(2, 10)).set({
+        classId: classId, className: className, at: Date.now()
+      }).catch(() => {});
       showToast("Žák odebrán ze třídy");
       overlay.remove();
       openClassDetail(classId, document.getElementById("classDetailTitle").textContent);
@@ -3175,32 +3199,42 @@ function playerAvatarFields() {
   else if (cachedProfile && cachedProfile.avatar) f.avatar = cachedProfile.avatar;
   return f;
 }
-document.getElementById("createBtn").addEventListener("click", async () => {
-  const err = document.getElementById("homeErr");
-  err.textContent = "";
+async function createLobbyAsHost() {
   playerName = autoPlayerName(); playerId = uid(); lobbyCode = randomCode(); isHost = true;
   const ok = await writeLobby(lobbyRef(lobbyCode, "meta"), {
     code: lobbyCode, hostId: playerId, status: "waiting", startTime: null, duration: 45000, createdAt: Date.now()
   });
-  if (!ok) { err.textContent = "Lobby se nepodařilo vytvořit, zkus to znovu."; return; }
+  if (!ok) return false;
   await joinLobbyAs(lobbyCode);
+  return true;
+}
+document.getElementById("createBtn").addEventListener("click", async () => {
+  const err = document.getElementById("homeErr");
+  err.textContent = "";
+  const ok = await createLobbyAsHost();
+  if (!ok) { err.textContent = "Lobby se nepodařilo vytvořit, zkus to znovu."; return; }
   enterLobbyScreen();
 });
 
+async function attemptJoinLobby(code) {
+  if (!code) return { ok: false, message: "Zadej kód lobby." };
+  const meta = await getMeta(code);
+  if (!meta) return { ok: false, message: "Lobby s tímto kódem neexistuje." };
+  if (meta.status !== "waiting") return { ok: false, message: "Tenhle závod už běží, počkej na další kolo." };
+  const existing = await getPlayers(code);
+  if (Object.keys(existing).length >= MAX_PLAYERS) return { ok: false, message: "Závod je plný — vejde se do něj " + MAX_PLAYERS + " hráčů." };
+  playerName = autoPlayerName(); playerId = uid(); lobbyCode = code; isHost = false;
+  await joinLobbyAs(code);
+  enterLobbyScreen();
+  return { ok: true };
+}
 document.getElementById("joinBtn").addEventListener("click", async () => {
   const codeEl = document.getElementById("joinCode");
   const err = document.getElementById("homeErr");
   err.textContent = "";
   const code = codeEl.value.trim().toUpperCase();
-  if (!code) { err.textContent = "Zadej kód lobby."; return; }
-  const meta = await getMeta(code);
-  if (!meta) { err.textContent = "Lobby s tímto kódem neexistuje."; return; }
-  if (meta.status !== "waiting") { err.textContent = "Tenhle závod už běží, počkej na další kolo."; return; }
-  const existing = await getPlayers(code);
-  if (Object.keys(existing).length >= MAX_PLAYERS) { err.textContent = "Závod je plný — vejde se do něj " + MAX_PLAYERS + " hráčů."; return; }
-  playerName = autoPlayerName(); playerId = uid(); lobbyCode = code; isHost = false;
-  await joinLobbyAs(code);
-  enterLobbyScreen();
+  const res = await attemptJoinLobby(code);
+  if (!res.ok) err.textContent = res.message;
 });
 
 async function joinLobbyAs(code) {
@@ -3318,15 +3352,19 @@ function watchClassRace(profile) {
 }
 
 const NOTIF_DUE_SOON_WINDOW = 24 * 3600 * 1000;
-let notifRequestsRef = null, notifAcceptsRef = null, notifAssignmentsRef = null;
+let notifRequestsRef = null, notifAcceptsRef = null, notifAssignmentsRef = null, notifRaceInvitesRef = null, notifKicksRef = null;
 let notifFriendRequests = {}, notifFriendAccepts = {};
 let notifNewAssignments = [], notifDueSoonAssignments = [];
+let notifRaceInvites = {}, notifKicks = {};
 function watchNotifications(profile) {
   if (notifRequestsRef) { notifRequestsRef.off(); notifRequestsRef = null; }
   if (notifAcceptsRef) { notifAcceptsRef.off(); notifAcceptsRef = null; }
   if (notifAssignmentsRef) { notifAssignmentsRef.off(); notifAssignmentsRef = null; }
+  if (notifRaceInvitesRef) { notifRaceInvitesRef.off(); notifRaceInvitesRef = null; }
+  if (notifKicksRef) { notifKicksRef.off(); notifKicksRef = null; }
   if (!currentUser) {
     notifFriendRequests = {}; notifFriendAccepts = {}; notifNewAssignments = []; notifDueSoonAssignments = [];
+    notifRaceInvites = {}; notifKicks = {};
     updateNotifBadge();
     updateFriendsBadge();
     return;
@@ -3335,6 +3373,10 @@ function watchNotifications(profile) {
   notifRequestsRef.on("value", (snap) => { notifFriendRequests = snap.val() || {}; updateFriendsBadge(); });
   notifAcceptsRef = fbdb.ref("friendAccepts/" + currentUser.uid);
   notifAcceptsRef.on("value", (snap) => { notifFriendAccepts = snap.val() || {}; updateFriendsBadge(); });
+  notifRaceInvitesRef = fbdb.ref("raceInvites/" + currentUser.uid);
+  notifRaceInvitesRef.on("value", (snap) => { notifRaceInvites = snap.val() || {}; updateNotifBadge(); });
+  notifKicksRef = fbdb.ref("classKicks/" + currentUser.uid);
+  notifKicksRef.on("value", (snap) => { notifKicks = snap.val() || {}; updateNotifBadge(); });
   if (profile && profile.classId) {
     notifAssignmentsRef = fbdb.ref("classes/" + profile.classId + "/assignments");
     notifAssignmentsRef.on("value", (snap) => { recomputeAssignmentNotifs(profile, snap.val() || {}); });
@@ -3363,7 +3405,8 @@ function recomputeAssignmentNotifs(profile, assignments) {
 function updateNotifBadge() {
   const badge = document.getElementById("notifBadge");
   if (!badge) return;
-  const count = notifNewAssignments.length + notifDueSoonAssignments.length;
+  const count = notifNewAssignments.length + notifDueSoonAssignments.length
+    + Object.keys(notifRaceInvites).length + Object.keys(notifKicks).length;
   if (count > 0) { badge.textContent = count > 9 ? "9+" : String(count); badge.style.display = "flex"; }
   else { badge.style.display = "none"; }
 }
@@ -3391,10 +3434,24 @@ function newAssignmentItemHtml(a) {
   return '<div class="notif-item"><div class="ni-text">Nový úkol: <strong>' + (a.label || ASSIGNMENT_TYPES[a.type].name) + '</strong>'
     + '<div class="ni-sub">' + assignmentDesc(a) + '</div></div></div>';
 }
+function raceInviteItemHtml(id, inv) {
+  return '<div class="notif-item"><div class="ni-text"><strong>' + (inv.fromName || "Hráč") + '</strong> tě zve do závodu<div class="ni-sub">Lobby ' + (inv.code || "") + '</div></div>'
+    + '<div class="notif-actions"><button class="btn-primary" data-notif-join-lobby="' + id + '" data-lobby-code="' + (inv.code || "") + '">Připojit</button>'
+    + '<button class="btn-secondary" data-notif-decline-lobby="' + id + '">Odmítnout</button></div></div>';
+}
+function classKickItemHtml(id, k) {
+  const msg = k.deleted
+    ? 'Třída <strong>' + (k.className || "") + '</strong> byla zrušena'
+    : 'Byl(a) jsi odebrán(a) ze třídy <strong>' + (k.className || "") + '</strong>';
+  return '<div class="notif-item"><div class="ni-text">' + msg + '</div>'
+    + '<div class="notif-actions"><button class="btn-secondary" data-notif-ack-kick="' + id + '" data-kick-classid="' + (k.classId || "") + '">OK</button></div></div>';
+}
 function showNotifPanel() {
   const overlay = document.createElement("div");
   overlay.className = "levelup-overlay";
   const parts = [];
+  Object.keys(notifKicks).forEach(id => parts.push(classKickItemHtml(id, notifKicks[id])));
+  Object.keys(notifRaceInvites).forEach(id => parts.push(raceInviteItemHtml(id, notifRaceInvites[id])));
   notifDueSoonAssignments.forEach(a => parts.push(dueSoonItemHtml(a)));
   notifNewAssignments.forEach(a => parts.push(newAssignmentItemHtml(a)));
   const body = parts.length ? parts.join("") : '<div class="notif-list-empty">Zatím žádné notifikace.</div>';
@@ -3402,6 +3459,41 @@ function showNotifPanel() {
     + '<p class="lu-title" style="margin-bottom:14px;">Notifikace</p><div id="notifPanelBody">' + body + '</div></div>';
   document.body.appendChild(overlay);
   overlay.addEventListener("click", (e) => { if (e.target === overlay) overlay.remove(); });
+  overlay.querySelectorAll("[data-notif-join-lobby]").forEach(btn => {
+    btn.addEventListener("click", async () => {
+      const id = btn.dataset.notifJoinLobby;
+      const code = btn.dataset.lobbyCode;
+      if (currentUser) fbdb.ref("raceInvites/" + currentUser.uid + "/" + id).remove().catch(() => {});
+      overlay.remove();
+      const res = await attemptJoinLobby(code);
+      if (!res.ok) showToast(res.message);
+    });
+  });
+  overlay.querySelectorAll("[data-notif-decline-lobby]").forEach(btn => {
+    btn.addEventListener("click", () => {
+      const id = btn.dataset.notifDeclineLobby;
+      if (currentUser) fbdb.ref("raceInvites/" + currentUser.uid + "/" + id).remove().catch(() => {});
+      const item = btn.closest(".notif-item");
+      if (item) item.remove();
+    });
+  });
+  overlay.querySelectorAll("[data-notif-ack-kick]").forEach(btn => {
+    btn.addEventListener("click", async () => {
+      const id = btn.dataset.notifAckKick;
+      const kickedClassId = btn.dataset.kickClassid;
+      if (currentUser) fbdb.ref("classKicks/" + currentUser.uid + "/" + id).remove().catch(() => {});
+      const item = btn.closest(".notif-item");
+      if (item) item.remove();
+      try {
+        const profile = await loadProfile();
+        if (profile.classId && (!kickedClassId || profile.classId === kickedClassId)) {
+          delete profile.classId;
+          await saveProfile(profile);
+          if (onScreen("class-detail") || onScreen("school")) { renderClassSection(profile); show("school"); }
+        }
+      } catch (e) {}
+    });
+  });
   // prohlednuti panelu oznaci nove ukoly jako videne
   if (notifNewAssignments.length && currentUser) {
     const seenAt = Date.now();
