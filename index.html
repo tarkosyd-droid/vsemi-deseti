@@ -1448,7 +1448,7 @@ document.getElementById("authRegisterBtn").addEventListener("click", async () =>
 document.getElementById("authLogoutBtn").addEventListener("click", () => fbauth.signOut());
 document.getElementById("authNickBtn").addEventListener("click", async () => {
   if (!currentUser) return;
-  const nick = await askNickname();
+  const nick = await askNickname(currentUser.uid);
   const profile = await loadProfile();
   profile.nickname = nick;
   await saveProfile(profile);
@@ -1493,7 +1493,7 @@ fbauth.onAuthStateChanged(async (user) => {
       const freshSnap = await fbdb.ref("users/" + user.uid + "/profile").get();
       const profile = freshSnap.val() || {};
       if (!profile.nickname) {
-        const nick = await askNickname();
+        const nick = await askNickname(user.uid);
         profile.nickname = nick;
         await fbdb.ref("users/" + user.uid + "/profile").set(profile);
         await claimUsername(user.uid, nick);
@@ -1655,7 +1655,7 @@ function askRole() {
     overlay.querySelector("#roleStudentBtn").addEventListener("click", () => { overlay.remove(); resolve("student"); });
   });
 }
-function askNickname() {
+function askNickname(currentUid) {
   return new Promise((resolve) => {
     const overlay = document.createElement("div");
     overlay.className = "levelup-overlay";
@@ -1664,17 +1664,30 @@ function askNickname() {
       + '<p class="lu-title">Jak se ti budeme říkat?</p>'
       + '<p class="lu-sub" style="margin-bottom:14px;">Tahle přezdívka se bude zobrazovat v žebříčku a v závodech.</p>'
       + '<input type="text" id="nicknamePromptInput" placeholder="Tvoje přezdívka" maxlength="16" style="text-align:center; margin-bottom:8px;">'
-      + '<p class="hint" id="nicknamePromptErr" style="display:none; color:#ff6b6b; margin:0 0 8px;">Tahle přezdívka obsahuje nevhodné slovo, zkus prosím jinou.</p>'
+      + '<p class="hint" id="nicknamePromptErr" style="display:none; color:#ff6b6b; margin:0 0 8px;"></p>'
       + '<button class="btn-primary" id="nicknamePromptSave" style="margin-bottom:0;">Uložit</button>'
       + '</div>';
     document.body.appendChild(overlay);
     const input = overlay.querySelector("#nicknamePromptInput");
     const errEl = overlay.querySelector("#nicknamePromptErr");
+    const saveBtn = overlay.querySelector("#nicknamePromptSave");
     input.focus();
-    function submit() {
+    function showErr(msg) { errEl.textContent = msg; errEl.style.display = ""; input.focus(); }
+    async function submit() {
       const val = input.value.trim();
       if (!val) { input.focus(); return; }
-      if (containsProfanity(val)) { errEl.style.display = ""; input.focus(); return; }
+      if (containsProfanity(val)) { showErr("Tahle přezdívka obsahuje nevhodné slovo, zkus prosím jinou."); return; }
+      saveBtn.disabled = true;
+      try {
+        const takenSnap = await fbdb.ref("usernames/" + val).get();
+        const takenBy = takenSnap.exists() ? takenSnap.val() : null;
+        if (takenBy && takenBy !== currentUid) {
+          saveBtn.disabled = false;
+          showErr("Tuhle přezdívku už někdo používá, zkus jinou.");
+          return;
+        }
+      } catch (e) { /* pri chybe site kontrolu neblokujeme */ }
+      saveBtn.disabled = false;
       overlay.remove();
       resolve(val);
     }
@@ -3356,6 +3369,7 @@ let notifRequestsRef = null, notifAcceptsRef = null, notifAssignmentsRef = null,
 let notifFriendRequests = {}, notifFriendAccepts = {};
 let notifNewAssignments = [], notifDueSoonAssignments = [];
 let notifRaceInvites = {}, notifKicks = {};
+let notifSeenDueSoonIds = new Set(), notifSeenInviteIds = new Set(), notifSeenKickIds = new Set();
 function watchNotifications(profile) {
   if (notifRequestsRef) { notifRequestsRef.off(); notifRequestsRef = null; }
   if (notifAcceptsRef) { notifAcceptsRef.off(); notifAcceptsRef = null; }
@@ -3365,6 +3379,7 @@ function watchNotifications(profile) {
   if (!currentUser) {
     notifFriendRequests = {}; notifFriendAccepts = {}; notifNewAssignments = []; notifDueSoonAssignments = [];
     notifRaceInvites = {}; notifKicks = {};
+    notifSeenDueSoonIds = new Set(); notifSeenInviteIds = new Set(); notifSeenKickIds = new Set();
     updateNotifBadge();
     updateFriendsBadge();
     return;
@@ -3405,8 +3420,10 @@ function recomputeAssignmentNotifs(profile, assignments) {
 function updateNotifBadge() {
   const badge = document.getElementById("notifBadge");
   if (!badge) return;
-  const count = notifNewAssignments.length + notifDueSoonAssignments.length
-    + Object.keys(notifRaceInvites).length + Object.keys(notifKicks).length;
+  const dueSoonUnseen = notifDueSoonAssignments.filter(a => !notifSeenDueSoonIds.has(a.id)).length;
+  const inviteUnseen = Object.keys(notifRaceInvites).filter(id => !notifSeenInviteIds.has(id)).length;
+  const kickUnseen = Object.keys(notifKicks).filter(id => !notifSeenKickIds.has(id)).length;
+  const count = notifNewAssignments.length + dueSoonUnseen + inviteUnseen + kickUnseen;
   if (count > 0) { badge.textContent = count > 9 ? "9+" : String(count); badge.style.display = "flex"; }
   else { badge.style.display = "none"; }
 }
@@ -3459,6 +3476,11 @@ function showNotifPanel() {
     + '<p class="lu-title" style="margin-bottom:14px;">Notifikace</p><div id="notifPanelBody">' + body + '</div></div>';
   document.body.appendChild(overlay);
   overlay.addEventListener("click", (e) => { if (e.target === overlay) overlay.remove(); });
+  // otevreni panelu oznaci vsechny aktualne zobrazene polozky jako videne, aby zmizel odznak s poctem
+  notifDueSoonAssignments.forEach(a => notifSeenDueSoonIds.add(a.id));
+  Object.keys(notifRaceInvites).forEach(id => notifSeenInviteIds.add(id));
+  Object.keys(notifKicks).forEach(id => notifSeenKickIds.add(id));
+  updateNotifBadge();
   overlay.querySelectorAll("[data-notif-join-lobby]").forEach(btn => {
     btn.addEventListener("click", async () => {
       const id = btn.dataset.notifJoinLobby;
