@@ -825,6 +825,13 @@
           <p class="hint" style="margin:-6px 0 10px;">Klikni na profilovku a nahraj vlastní fotku, nebo vyber odemčenou ikonu.</p>
           <div class="avatar-picker" id="profileAvatarPicker"></div>
           <button class="btn-secondary" id="authNickBtn" style="margin-bottom:0;">Změnit přezdívku</button>
+          <div class="auth-divider" style="margin:14px 0 10px;"><span>škola</span></div>
+          <p class="hint" style="text-align:left; margin:0 0 8px;">Máš licenční kód pro školu? Zadej ho tady — funguje pro každého (učitele i žáky).</p>
+          <div style="display:flex; gap:8px;">
+            <input type="text" id="profileLicenseInput" placeholder="Licenční kód" style="flex:1;">
+            <button class="btn-secondary btn-compact" id="profileLicenseSubmit" style="margin-bottom:0;">Aktivovat</button>
+          </div>
+          <p class="hint" id="profileLicenseMsg" style="margin:6px 0 0;"></p>
           <div id="adminLicenseBox" style="display:none;"></div>
         </div>
     </div>
@@ -1460,6 +1467,22 @@ document.getElementById("authNickBtn").addEventListener("click", async () => {
   await claimUsername(currentUser.uid, nick);
   renderProfile(profile);
 });
+document.getElementById("profileLicenseSubmit").addEventListener("click", async () => {
+  const input = document.getElementById("profileLicenseInput");
+  const msgEl = document.getElementById("profileLicenseMsg");
+  msgEl.style.color = "";
+  msgEl.textContent = "";
+  if (!currentUser) { msgEl.textContent = "Pro aktivaci licence se musíš přihlásit."; msgEl.style.color = "#ff6b6b"; return; }
+  const profile = await loadProfile();
+  const res = await redeemLicenseCode(profile, input.value);
+  if (!res.ok) { msgEl.textContent = res.message; msgEl.style.color = "#ff6b6b"; return; }
+  input.value = "";
+  msgEl.textContent = "Licence aktivována!";
+  msgEl.style.color = "#4caf82";
+  refreshTrialNotifState(profile);
+  if (currentScreenId === "school") renderClassSection(profile);
+});
+document.getElementById("profileLicenseInput").addEventListener("keydown", (e) => { if (e.key === "Enter") document.getElementById("profileLicenseSubmit").click(); });
 document.getElementById("resetStatsBtn").addEventListener("click", async () => {
   const ok = await showConfirm("Vynulovat statistiky?", "Průměrná rychlost, přesnost, počet lekcí a čas psaní se vynulují. Level, XP a odznaky zůstanou zachované.");
   if (!ok) return;
@@ -2165,10 +2188,9 @@ async function redeemLicenseCode(profile, rawCode) {
     const snap = await fbdb.ref("schoolLicenses/" + code).get();
     if (!snap.exists()) return { ok: false, message: "Tenhle kód neexistuje. Zkontroluj, jestli je správně opsaný." };
     const lic = snap.val();
-    if (lic.redeemedBy && lic.redeemedBy !== currentUser.uid) return { ok: false, message: "Tenhle kód už je použitý." };
-    if (!lic.redeemedBy) {
-      await fbdb.ref("schoolLicenses/" + code).update({ redeemedBy: currentUser.uid, redeemedAt: Date.now() });
-    }
+    if (lic.revoked) return { ok: false, message: "Tenhle kód už není platný." };
+    // kod je sdileny za celou skolu - muze ho pouzit vic uctu najednou (ucitele i zaci)
+    await fbdb.ref("schoolLicenses/" + code + "/redeemedBy/" + currentUser.uid).set(Date.now());
     profile.schoolAccess = { type: "licensed", code: code, activatedAt: Date.now() };
     await saveProfile(profile);
     return { ok: true };
@@ -2176,7 +2198,7 @@ async function redeemLicenseCode(profile, rawCode) {
 }
 async function generateLicenseCode(schoolName) {
   const code = "SKOLA-" + Math.random().toString(36).slice(2, 6).toUpperCase() + "-" + Math.random().toString(36).slice(2, 6).toUpperCase();
-  await fbdb.ref("schoolLicenses/" + code).set({ schoolName: schoolName || "", createdAt: Date.now(), redeemedBy: null, redeemedAt: null });
+  await fbdb.ref("schoolLicenses/" + code).set({ schoolName: schoolName || "", createdAt: Date.now() });
   return code;
 }
 function pluralDni(n) { return n === 1 ? "den" : (n >= 2 && n <= 4 ? "dny" : "dní"); }
@@ -2212,6 +2234,7 @@ function showSchoolPaywall(profile) {
     if (!res.ok) { errEl.textContent = res.message; errEl.style.display = ""; return; }
     overlay.remove();
     showToast("Licence aktivována!");
+    refreshTrialNotifState(profile);
     renderClassSection(profile);
   });
   overlay.querySelector("#schoolLicenseInput").addEventListener("keydown", (e) => { if (e.key === "Enter") overlay.querySelector("#schoolLicenseSubmit").click(); });
@@ -2225,7 +2248,8 @@ async function renderAdminLicenseList() {
     const codes = Object.keys(all).sort((a, b) => (all[b].createdAt || 0) - (all[a].createdAt || 0));
     listEl.innerHTML = codes.length ? codes.map(code => {
       const l = all[code];
-      const status = l.redeemedBy ? "použitý" : "volný";
+      const count = l.redeemedBy ? Object.keys(l.redeemedBy).length : 0;
+      const status = count ? (count + "× aktivováno") : "zatím nepoužitý";
       return '<div class="lesson-row static-row"><span class="name">' + code + (l.schoolName ? ' <span class="hint">(' + l.schoolName + ')</span>' : '') + '</span><span class="best">' + status + '</span></div>';
     }).join("") : '<p class="hint">Zatím žádné kódy.</p>';
   } catch (e) { listEl.innerHTML = '<p class="hint">Kódy se nepodařilo načíst.</p>'; }
@@ -2294,6 +2318,7 @@ async function renderClassSection(profile) {
       const html = schoolLicenseStatusHtml(status);
       licenseBox.innerHTML = html;
       licenseBox.style.display = html ? "" : "none";
+      refreshTrialNotifState(profile);
     } else {
       licenseBox.style.display = "none";
       licenseBox.innerHTML = "";
@@ -2361,6 +2386,7 @@ document.getElementById("createClassBtn").addEventListener("click", async () => 
       await saveProfile(profile);
       status = schoolAccessStatus(profile);
       startedTrial = true;
+      refreshTrialNotifState(profile);
     } else {
       showSchoolPaywall(profile);
       return;
@@ -3527,6 +3553,21 @@ let notifFriendRequests = {}, notifFriendAccepts = {};
 let notifNewAssignments = [], notifDueSoonAssignments = [];
 let notifRaceInvites = {}, notifKicks = {};
 let notifSeenDueSoonIds = new Set(), notifSeenInviteIds = new Set(), notifSeenKickIds = new Set();
+let notifTrialWarning = null;
+let notifSeenTrialKeys = new Set();
+function trialWarningKey() { return notifTrialWarning ? (notifTrialWarning.type + ":" + (notifTrialWarning.daysLeft || "")) : null; }
+function refreshTrialNotifState(profile) {
+  notifTrialWarning = null;
+  if (profile && profile.role === "teacher" && profile.schoolAccess) {
+    const status = schoolAccessStatus(profile);
+    if (status.type === "trial" && status.daysLeft <= 3) {
+      notifTrialWarning = { type: "trial_ending", daysLeft: status.daysLeft };
+    } else if (status.type === "trial_expired") {
+      notifTrialWarning = { type: "trial_expired" };
+    }
+  }
+  updateNotifBadge();
+}
 function watchNotifications(profile) {
   if (notifRequestsRef) { notifRequestsRef.off(); notifRequestsRef = null; }
   if (notifAcceptsRef) { notifAcceptsRef.off(); notifAcceptsRef = null; }
@@ -3537,10 +3578,12 @@ function watchNotifications(profile) {
     notifFriendRequests = {}; notifFriendAccepts = {}; notifNewAssignments = []; notifDueSoonAssignments = [];
     notifRaceInvites = {}; notifKicks = {};
     notifSeenDueSoonIds = new Set(); notifSeenInviteIds = new Set(); notifSeenKickIds = new Set();
+    notifTrialWarning = null; notifSeenTrialKeys = new Set();
     updateNotifBadge();
     updateFriendsBadge();
     return;
   }
+  refreshTrialNotifState(profile);
   notifRequestsRef = fbdb.ref("friendRequests/" + currentUser.uid);
   notifRequestsRef.on("value", (snap) => { notifFriendRequests = snap.val() || {}; updateFriendsBadge(); });
   notifAcceptsRef = fbdb.ref("friendAccepts/" + currentUser.uid);
@@ -3580,7 +3623,8 @@ function updateNotifBadge() {
   const dueSoonUnseen = notifDueSoonAssignments.filter(a => !notifSeenDueSoonIds.has(a.id)).length;
   const inviteUnseen = Object.keys(notifRaceInvites).filter(id => !notifSeenInviteIds.has(id)).length;
   const kickUnseen = Object.keys(notifKicks).filter(id => !notifSeenKickIds.has(id)).length;
-  const count = notifNewAssignments.length + dueSoonUnseen + inviteUnseen + kickUnseen;
+  const trialUnseen = (notifTrialWarning && !notifSeenTrialKeys.has(trialWarningKey())) ? 1 : 0;
+  const count = notifNewAssignments.length + dueSoonUnseen + inviteUnseen + kickUnseen + trialUnseen;
   if (count > 0) { badge.textContent = count > 9 ? "9+" : String(count); badge.style.display = "flex"; }
   else { badge.style.display = "none"; }
 }
@@ -3620,11 +3664,19 @@ function classKickItemHtml(id, k) {
   return '<div class="notif-item"><div class="ni-text">' + msg + '</div>'
     + '<div class="notif-actions"><button class="btn-secondary" data-notif-ack-kick="' + id + '" data-kick-classid="' + (k.classId || "") + '">OK</button></div></div>';
 }
+function trialWarningItemHtml() {
+  if (!notifTrialWarning) return "";
+  if (notifTrialWarning.type === "trial_expired") {
+    return '<div class="notif-item"><div class="ni-text">Zkušební verze funkcí pro školu <strong>vypršela</strong><div class="ni-sub">Pro další třídy a úkoly je potřeba licence.</div></div></div>';
+  }
+  return '<div class="notif-item"><div class="ni-text">Zkušební verze funkcí pro školu brzy končí<div class="ni-sub">Zbývá ' + notifTrialWarning.daysLeft + ' ' + pluralDni(notifTrialWarning.daysLeft) + '.</div></div></div>';
+}
 function showNotifPanel() {
   const overlay = document.createElement("div");
   overlay.className = "levelup-overlay";
   const parts = [];
   Object.keys(notifKicks).forEach(id => parts.push(classKickItemHtml(id, notifKicks[id])));
+  if (notifTrialWarning) parts.push(trialWarningItemHtml());
   Object.keys(notifRaceInvites).forEach(id => parts.push(raceInviteItemHtml(id, notifRaceInvites[id])));
   notifDueSoonAssignments.forEach(a => parts.push(dueSoonItemHtml(a)));
   notifNewAssignments.forEach(a => parts.push(newAssignmentItemHtml(a)));
@@ -3637,6 +3689,7 @@ function showNotifPanel() {
   notifDueSoonAssignments.forEach(a => notifSeenDueSoonIds.add(a.id));
   Object.keys(notifRaceInvites).forEach(id => notifSeenInviteIds.add(id));
   Object.keys(notifKicks).forEach(id => notifSeenKickIds.add(id));
+  if (notifTrialWarning) notifSeenTrialKeys.add(trialWarningKey());
   updateNotifBadge();
   overlay.querySelectorAll("[data-notif-join-lobby]").forEach(btn => {
     btn.addEventListener("click", async () => {
