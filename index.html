@@ -248,6 +248,8 @@
     display: flex; align-items: center; justify-content: center; color: var(--accent2);
   }
   .role-card-label { font-weight: 700; font-size: 14px; }
+  .finger-guide-list { display: flex; flex-direction: column; gap: 8px; margin-bottom: 14px; }
+  .finger-guide-row { display: flex; align-items: center; gap: 12px; font-size: 14px; color: var(--tx); }
   .code-display {
     text-align: center; font-family: 'JetBrains Mono', monospace; font-size: 38px; font-weight: 700; letter-spacing: 8px;
     background: #1c1c20; border: 1px solid var(--line); border-radius: 12px; padding: 16px; margin-bottom: 16px;
@@ -2858,6 +2860,33 @@ let beginnerProgressCache = 0;
 function stageLevelDone(profile, stageId) {
   return (profile.beginnerLevels && profile.beginnerLevels[stageId]) || 0;
 }
+const FINGER_NAMES = {
+  lp: "levý malíček", lr: "levý prsteníček", lm: "levý prostředníček", li: "levý ukazováček",
+  ri: "pravý ukazováček", rm: "pravý prostředníček", rr: "pravý prsteníček", rp: "pravý malíček", thumb: "palec"
+};
+function fingerForKey(ch) {
+  for (const row of ROWS) { const found = row.find(([k]) => k === ch); if (found) return found[1]; }
+  return null;
+}
+function showFingerGuide(stage) {
+  return new Promise((resolve) => {
+    const overlay = document.createElement("div");
+    overlay.className = "levelup-overlay";
+    const keyRows = stage.keys.map(k => {
+      const fg = fingerForKey(k);
+      return '<div class="finger-guide-row"><span class="beg-mini-key hit f-' + fg + '" style="width:34px; height:34px; font-size:15px;">' + k.toUpperCase() + '</span><span>' + (FINGER_NAMES[fg] || "") + '</span></div>';
+    }).join("");
+    overlay.innerHTML = '<div class="levelup-card form-card" style="cursor:default; max-width:360px;">'
+      + '<p class="lu-title" style="font-size:18px;">' + stage.name + '</p>'
+      + '<p class="lu-sub" style="margin-bottom:12px;">' + stage.hint + '</p>'
+      + '<div class="finger-guide-list">' + keyRows + '</div>'
+      + miniKeyboardHtml(stage.keys)
+      + '<button class="btn-primary" id="fingerGuideStartBtn" style="margin-top:16px; margin-bottom:0;">Začít psát</button>'
+      + '</div>';
+    document.body.appendChild(overlay);
+    overlay.querySelector("#fingerGuideStartBtn").addEventListener("click", () => { overlay.remove(); resolve(); });
+  });
+}
 function miniKeyboardHtml(targetKeys) {
   const set = new Set(targetKeys.map(k => k.toLowerCase()));
   return '<div class="beg-mini-kb">' + ROWS.slice(1).map(row =>
@@ -2907,10 +2936,17 @@ async function renderBeginnerList() {
     }
     if (isCurrent) {
       card.style.cursor = "pointer";
-      card.addEventListener("click", () => startSolo(stage, stage.texts[levelsDone], levelsDone + 1));
+      card.addEventListener("click", () => {
+        if (levelsDone === 0) showFingerGuide(stage).then(() => startSolo(stage, stage.texts[0], 1));
+        else startSolo(stage, stage.texts[levelsDone], levelsDone + 1);
+      });
       card.querySelectorAll(".level-dot").forEach(dot => {
         const lv = parseInt(dot.dataset.lv, 10);
-        if (levelsDone >= lv) dot.addEventListener("click", (e) => { e.stopPropagation(); startSolo(stage, stage.texts[lv], lv + 1); });
+        if (levelsDone >= lv) dot.addEventListener("click", (e) => {
+          e.stopPropagation();
+          if (lv === 0 && levelsDone === 0) showFingerGuide(stage).then(() => startSolo(stage, stage.texts[0], 1));
+          else startSolo(stage, stage.texts[lv], lv + 1);
+        });
       });
     }
     el.appendChild(card);
