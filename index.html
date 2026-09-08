@@ -13,6 +13,7 @@
 <script src="https://cdnjs.cloudflare.com/ajax/libs/firebase/10.13.2/firebase-auth-compat.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/firebase/10.13.2/firebase-app-check-compat.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/canvas-confetti/1.9.3/confetti.browser.min.js"></script>
 <style>
   * { box-sizing: border-box; }
   :root {
@@ -623,6 +624,18 @@
     position: fixed; inset: 0; display: flex; align-items: center; justify-content: center;
     background: rgba(6,7,12,0.6); z-index: 90; animation: fadeIn 0.2s ease; cursor: pointer;
     padding: 16px; box-sizing: border-box;
+  }
+  .celebrate-overlay { backdrop-filter: blur(7px); -webkit-backdrop-filter: blur(7px); background: rgba(6,7,12,0.72); }
+  .celebrate-card { animation: flyInSpring 0.55s cubic-bezier(.34,1.56,.64,1); }
+  @keyframes flyInSpring {
+    0% { transform: translateY(55px) scale(0.7); opacity: 0; }
+    55% { transform: translateY(-10px) scale(1.06); opacity: 1; }
+    100% { transform: translateY(0) scale(1); }
+  }
+  .badge-earn-icons { display: flex; gap: 10px; justify-content: center; flex-wrap: wrap; margin: 8px 0 2px; }
+  .badge-earn-icons .bei {
+    width: 46px; height: 46px; border-radius: 50%; background: rgba(255,255,255,0.08);
+    display: flex; align-items: center; justify-content: center;
   }
   .levelup-card {
     background: linear-gradient(160deg, #2a2a2f, #202024); border: 1px solid var(--gold); border-radius: 22px;
@@ -1323,7 +1336,7 @@ function makeTypingEngine(opts) {
 }
 
 /* ---------- confetti ---------- */
-function fireConfetti() {
+function fireConfettiFallback() {
   const colors = ["#6f8cff","#b06fff","#4ee08a","#ffce54","#ff6b7d"];
   const layer = document.getElementById("confettiLayer");
   for (let i = 0; i < 60; i++) {
@@ -1338,6 +1351,93 @@ function fireConfetti() {
     layer.appendChild(p);
     setTimeout(() => p.remove(), 4000);
   }
+}
+function fireConfetti() {
+  if (typeof confetti === "function") {
+    try {
+      confetti({ particleCount: 90, spread: 75, startVelocity: 42, origin: { y: 0.35 }, colors: ["#6f8cff","#b06fff","#4ee08a","#ffce54","#ff6b7d"], zIndex: 95 });
+      return;
+    } catch (e) { /* spadni na domaci konfety */ }
+  }
+  fireConfettiFallback();
+}
+
+/* ---------- reward sound ---------- */
+let _rewardAudioCtx = null;
+function playRewardSound() {
+  try {
+    if (!_rewardAudioCtx) _rewardAudioCtx = new (window.AudioContext || window.webkitAudioContext)();
+    const ctx = _rewardAudioCtx;
+    if (ctx.state === "suspended") ctx.resume().catch(() => {});
+    const now = ctx.currentTime;
+    const notes = [523.25, 659.25, 783.99, 1046.5]; // C5 E5 G5 C6 - vzestupny "reward" chime
+    const master = ctx.createGain();
+    master.gain.value = 0.16;
+    master.connect(ctx.destination);
+    notes.forEach((freq, i) => {
+      const osc = ctx.createOscillator();
+      const g = ctx.createGain();
+      const t0 = now + i * 0.09;
+      osc.type = "triangle";
+      osc.frequency.value = freq;
+      g.gain.setValueAtTime(0, t0);
+      g.gain.linearRampToValueAtTime(1, t0 + 0.015);
+      g.gain.exponentialRampToValueAtTime(0.001, t0 + 0.35);
+      osc.connect(g); g.connect(master);
+      osc.start(t0); osc.stop(t0 + 0.4);
+    });
+  } catch (e) { /* zvuk je jen bonus, ticho nevadi */ }
+}
+
+/* ---------- celebration overlays (level up / badge / streak) ---------- */
+const CELEBRATION_BLOCK_MS = 3000;
+const CELEBRATION_AUTO_MS = 4200;
+let celebrationBusy = false;
+const celebrationQueue = [];
+function queueCelebration(buildInner) {
+  celebrationQueue.push(buildInner);
+  runCelebrationQueue();
+}
+function runCelebrationQueue() {
+  if (celebrationBusy || !celebrationQueue.length) return;
+  celebrationBusy = true;
+  const buildInner = celebrationQueue.shift();
+  const overlay = document.createElement("div");
+  overlay.className = "levelup-overlay celebrate-overlay";
+  overlay.innerHTML = '<div class="levelup-card celebrate-card">' + buildInner() + '</div>';
+  document.body.appendChild(overlay);
+  fireConfetti();
+  playRewardSound();
+  let dismissable = false;
+  const finish = () => {
+    if (!overlay.parentNode) return;
+    overlay.remove();
+    celebrationBusy = false;
+    runCelebrationQueue();
+  };
+  overlay.addEventListener("click", () => { if (dismissable) finish(); });
+  setTimeout(() => { dismissable = true; }, CELEBRATION_BLOCK_MS);
+  setTimeout(finish, CELEBRATION_AUTO_MS);
+}
+function showBadgeEarned(b) {
+  queueCelebration(() => '<div class="lu-icon">' + (b.icon && b.icon.indexOf("<svg") === 0 ? b.icon : "🏅") + '</div>'
+    + '<p class="lu-title">Nový odznak!</p>'
+    + '<p class="lu-sub" style="font-weight:700; margin-bottom:4px;">' + b.name + '</p>'
+    + '<p class="lu-sub">' + b.desc + '</p>');
+}
+function showBadgesEarned(list) {
+  if (!list.length) return;
+  if (list.length === 1) { showBadgeEarned(list[0]); return; }
+  const icons = list.map(b => '<span class="bei">' + (b.icon && b.icon.indexOf("<svg") === 0 ? b.icon : "🏅") + '</span>').join("");
+  queueCelebration(() => '<div class="lu-icon">🏅</div>'
+    + '<p class="lu-title">' + list.length + ' nové odznaky!</p>'
+    + '<div class="badge-earn-icons">' + icons + '</div>'
+    + '<p class="lu-sub">' + list.map(b => b.name).join(" · ") + '</p>');
+}
+function showStreakCelebration(days) {
+  queueCelebration(() => '<div class="lu-icon">' + svgIcon("flame", 46) + '</div>'
+    + '<p class="lu-title">Šňůra ' + days + ' ' + pluralDni(days) + '!</p>'
+    + '<p class="lu-sub">Trénuješ v kuse ' + days + ' ' + pluralDni(days) + '. Nenech to přerušit!</p>');
 }
 
 const ICON_PATHS = {
@@ -1848,13 +1948,7 @@ function badgeToastIcon(b) {
   return b.icon;
 }
 function showLevelUp(level) {
-  const overlay = document.createElement("div");
-  overlay.className = "levelup-overlay";
-  overlay.innerHTML = '<div class="levelup-card"><div class="lu-icon">🎉</div><p class="lu-title">Level up!</p><p class="lu-sub">Dosáhl jsi úrovně ' + level + '</p></div>';
-  document.body.appendChild(overlay);
-  fireConfetti();
-  overlay.addEventListener("click", () => overlay.remove());
-  setTimeout(() => overlay.remove(), 2600);
+  queueCelebration(() => '<div class="lu-icon">🎉</div><p class="lu-title">Level up!</p><p class="lu-sub">Dosáhl jsi úrovně ' + level + '</p>');
 }
 async function recordResult({ cpm, acc, lessonId, isRace, won, textLength, timeMs, xpScale, beginnerStage, beginnerLevel }) {
   const profile = await loadProfile();
@@ -1878,7 +1972,10 @@ async function recordResult({ cpm, acc, lessonId, isRace, won, textLength, timeM
     profile.lessonIdsSeen = profile.lessonIdsSeen || [];
     if (!profile.lessonIdsSeen.includes(lessonId)) profile.lessonIdsSeen.push(lessonId);
   }
+  const oldStreak = profile.streak || 0;
+  const hadPriorActivity = !!profile.lastActiveDate;
   updateStreak(profile);
+  const streakContinued = hadPriorActivity && (profile.streak || 0) === oldStreak + 1 && (profile.streak || 0) >= 2;
   profile.badges = profile.badges || [];
   const ctx = { cpm, acc, lessonId, isRace, won, profile };
   const newlyEarned = [];
@@ -1904,11 +2001,12 @@ async function recordResult({ cpm, acc, lessonId, isRace, won, textLength, timeM
   }
   const newLevel = getLevelInfo(profile.xp).level;
   if (newLevel > oldLevel) {
-    setTimeout(() => showLevelUp(newLevel), 300);
+    showLevelUp(newLevel);
   } else {
     showToast("+" + gained + " XP");
   }
-  newlyEarned.forEach((b, i) => setTimeout(() => showToast("Nový odznak: " + badgeToastIcon(b) + " " + b.name), 1400 + i * 900));
+  if (newlyEarned.length) showBadgesEarned(newlyEarned);
+  if (streakContinued) showStreakCelebration(profile.streak);
   const { bonus: questBonus, completed: questsCompleted } = updateDailyQuests(profile, { cpm, acc, isRace });
   if (questBonus > 0) profile.xp += questBonus;
   await saveProfile(profile);
@@ -1936,7 +2034,7 @@ async function checkChampionBadge(cpm, acc) {
   });
   await saveProfile(profile);
   renderProfile(profile);
-  newlyEarned.forEach((b, i) => setTimeout(() => showToast("Nový odznak: " + badgeToastIcon(b) + " " + b.name), i * 900));
+  if (newlyEarned.length) showBadgesEarned(newlyEarned);
 }
 
 const AVATAR_OPTIONS = [
@@ -3132,6 +3230,8 @@ function getBackTargetFor(screenId) {
 }
 function show(id, opts) {
   document.querySelectorAll(".levelup-overlay").forEach(o => o.remove());
+  celebrationBusy = false;
+  celebrationQueue.length = 0;
   currentScreenId = id;
   ["home","lessons","beginner","solo","solo-done","race-home","lobby","countdown","race","results","profile","school","class-detail"].forEach(s => {
     document.getElementById("screen-" + s).style.display = (s === id) ? "" : "none";
