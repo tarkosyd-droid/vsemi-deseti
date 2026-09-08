@@ -626,12 +626,26 @@
     padding: 16px; box-sizing: border-box;
   }
   .celebrate-overlay { backdrop-filter: blur(7px); -webkit-backdrop-filter: blur(7px); background: rgba(6,7,12,0.72); }
-  .celebrate-card { animation: flyInSpring 0.55s cubic-bezier(.34,1.56,.64,1); }
-  @keyframes flyInSpring {
-    0% { transform: translateY(55px) scale(0.7); opacity: 0; }
-    55% { transform: translateY(-10px) scale(1.06); opacity: 1; }
-    100% { transform: translateY(0) scale(1); }
+  .celebrate-card { animation: badgeBounceIn 0.6s cubic-bezier(.22,1,.36,1); position: relative; overflow: visible; }
+  @keyframes badgeBounceIn {
+    0% { transform: scale(0) translateY(18px); opacity: 0; }
+    50% { transform: scale(1.2) translateY(-8px); opacity: 1; }
+    75% { transform: scale(0.94) translateY(2px); }
+    100% { transform: scale(1) translateY(0); }
   }
+  .celebrate-card .lu-icon-wrap {
+    position: relative; display: flex; align-items: center; justify-content: center;
+    width: 78px; height: 78px; margin: 0 auto 10px;
+  }
+  .celebrate-card .lu-icon-wrap::before {
+    content: ""; position: absolute; top: 50%; left: 50%; width: 118px; height: 118px;
+    transform: translate(-50%, -50%); z-index: 0; border-radius: 50%;
+    background: repeating-conic-gradient(rgba(255,206,84,0.38) 0deg 7deg, transparent 7deg 22deg);
+    animation: sunburstSpin 7s linear infinite;
+    filter: blur(0.5px);
+  }
+  .celebrate-card .lu-icon-wrap .lu-icon { position: relative; z-index: 1; margin-bottom: 0; }
+  @keyframes sunburstSpin { to { transform: translate(-50%, -50%) rotate(360deg); } }
   .badge-earn-icons { display: flex; gap: 10px; justify-content: center; flex-wrap: wrap; margin: 8px 0 2px; }
   .badge-earn-icons .bei {
     width: 46px; height: 46px; border-radius: 50%; background: rgba(255,255,255,0.08);
@@ -1355,7 +1369,7 @@ function fireConfettiFallback() {
 function fireConfetti() {
   if (typeof confetti === "function") {
     try {
-      confetti({ particleCount: 90, spread: 75, startVelocity: 42, origin: { y: 0.35 }, colors: ["#6f8cff","#b06fff","#4ee08a","#ffce54","#ff6b7d"], zIndex: 95 });
+      confetti({ particleCount: 90, spread: 75, startVelocity: 42, origin: { y: 0.35 }, colors: ["#ffce54","#ffe08a","#b06fff","#7f4fff","#d9a6ff"], zIndex: 95 });
       return;
     } catch (e) { /* spadni na domaci konfety */ }
   }
@@ -1420,7 +1434,7 @@ function runCelebrationQueue() {
   setTimeout(finish, CELEBRATION_AUTO_MS);
 }
 function showBadgeEarned(b) {
-  queueCelebration(() => '<div class="lu-icon">' + (b.icon && b.icon.indexOf("<svg") === 0 ? b.icon : "🏅") + '</div>'
+  queueCelebration(() => '<div class="lu-icon-wrap"><div class="lu-icon">' + (b.icon && b.icon.indexOf("<svg") === 0 ? b.icon : "🏅") + '</div></div>'
     + '<p class="lu-title">Nový odznak!</p>'
     + '<p class="lu-sub" style="font-weight:700; margin-bottom:4px;">' + b.name + '</p>'
     + '<p class="lu-sub">' + b.desc + '</p>');
@@ -1429,13 +1443,13 @@ function showBadgesEarned(list) {
   if (!list.length) return;
   if (list.length === 1) { showBadgeEarned(list[0]); return; }
   const icons = list.map(b => '<span class="bei">' + (b.icon && b.icon.indexOf("<svg") === 0 ? b.icon : "🏅") + '</span>').join("");
-  queueCelebration(() => '<div class="lu-icon">🏅</div>'
+  queueCelebration(() => '<div class="lu-icon-wrap"><div class="lu-icon">🏅</div></div>'
     + '<p class="lu-title">' + list.length + ' nové odznaky!</p>'
     + '<div class="badge-earn-icons">' + icons + '</div>'
     + '<p class="lu-sub">' + list.map(b => b.name).join(" · ") + '</p>');
 }
 function showStreakCelebration(days) {
-  queueCelebration(() => '<div class="lu-icon">' + svgIcon("flame", 46) + '</div>'
+  queueCelebration(() => '<div class="lu-icon-wrap"><div class="lu-icon">' + svgIcon("flame", 46) + '</div></div>'
     + '<p class="lu-title">Šňůra ' + days + ' ' + pluralDni(days) + '!</p>'
     + '<p class="lu-sub">Trénuješ v kuse ' + days + ' ' + pluralDni(days) + '. Nenech to přerušit!</p>');
 }
@@ -1948,7 +1962,7 @@ function badgeToastIcon(b) {
   return b.icon;
 }
 function showLevelUp(level) {
-  queueCelebration(() => '<div class="lu-icon">🎉</div><p class="lu-title">Level up!</p><p class="lu-sub">Dosáhl jsi úrovně ' + level + '</p>');
+  queueCelebration(() => '<div class="lu-icon-wrap"><div class="lu-icon">🎉</div></div><p class="lu-title">Level up!</p><p class="lu-sub">Dosáhl jsi úrovně ' + level + '</p>');
 }
 async function recordResult({ cpm, acc, lessonId, isRace, won, textLength, timeMs, xpScale, beginnerStage, beginnerLevel }) {
   const profile = await loadProfile();
