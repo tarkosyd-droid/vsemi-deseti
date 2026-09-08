@@ -421,6 +421,34 @@
   .assign-form select option { background: #202024; color: var(--tx); }
   .assign-form input[type=datetime-local] { color-scheme: dark; }
   .assign-form input[type=datetime-local]::-webkit-calendar-picker-indicator { filter: invert(0.75); cursor: pointer; }
+  /* ---- custom-styled dropdown (nahrazuje neupravitelny nativni <select> popup) ---- */
+  .cdrop { position: relative; }
+  .cdrop select.cdrop-native {
+    position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; opacity: 0; pointer-events: none; border: 0;
+  }
+  .cdrop-display {
+    width: 100%; box-sizing: border-box; font-family: 'Inter', sans-serif; font-size: 15px; text-align: left;
+    padding: 11px 34px 11px 14px; border-radius: 10px; border: 1px solid var(--line); background: #1c1c20; color: var(--tx);
+    cursor: pointer; display: block; margin: 0;
+    background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='10' height='6'><path d='M0 0l5 6 5-6z' fill='%238a8fa3'/></svg>");
+    background-repeat: no-repeat; background-position: right 14px center;
+    transition: border-color 0.15s, box-shadow 0.15s;
+  }
+  .cdrop-display:focus { outline: none; border-color: var(--accent); box-shadow: 0 0 0 3px rgba(111,140,255,0.18); }
+  .cdrop.open .cdrop-display { border-color: var(--accent); }
+  .cdrop-menu {
+    position: absolute; left: 0; right: 0; top: calc(100% + 6px); z-index: 20; max-height: 220px; overflow-y: auto;
+    background: #202024; border: 1px solid var(--line); border-radius: 12px; padding: 6px;
+    box-shadow: 0 16px 40px -12px rgba(0,0,0,0.55); animation: fadeIn 0.12s ease;
+    scrollbar-width: thin; scrollbar-color: #3a3a40 transparent;
+  }
+  .cdrop-menu::-webkit-scrollbar { width: 8px; }
+  .cdrop-menu::-webkit-scrollbar-track { background: transparent; }
+  .cdrop-menu::-webkit-scrollbar-thumb { background: #3a3a40; border-radius: 8px; }
+  .cdrop-menu::-webkit-scrollbar-thumb:hover { background: #4a4a52; }
+  .cdrop-opt { padding: 9px 12px; border-radius: 8px; font-size: 14.5px; color: var(--tx); cursor: pointer; }
+  .cdrop-opt:hover, .cdrop-opt.highlighted { background: rgba(111,140,255,0.14); }
+  .cdrop-opt.selected { background: rgba(111,140,255,0.22); color: var(--tx); font-weight: 600; }
   .friend-card {
     display: flex; align-items: center; gap: 12px; background: #202024; border: 1px solid var(--line);
     border-radius: 12px; padding: 10px 12px;
@@ -2763,6 +2791,83 @@ function renderClassAssignments(classId, isOwner, assignments, memberCount) {
     });
   }
 }
+/* ---- nahrazuje ošklivý nativní <select> popup vlastním stylovaným dropdownem ---- */
+/* realny <select> zustava v DOM (skryty) kvuli hodnote/eventum/testum, jen se vizualne nahrazuje */
+function enhanceSelect(select) {
+  if (!select || select._cdropEnhanced) return;
+  select._cdropEnhanced = true;
+  const wrap = document.createElement("div");
+  wrap.className = "cdrop";
+  select.parentNode.insertBefore(wrap, select);
+  wrap.appendChild(select);
+  select.tabIndex = -1;
+  select.classList.add("cdrop-native");
+
+  const display = document.createElement("button");
+  display.type = "button";
+  display.className = "cdrop-display";
+  wrap.appendChild(display);
+
+  const menu = document.createElement("div");
+  menu.className = "cdrop-menu";
+  menu.hidden = true;
+  wrap.appendChild(menu);
+
+  function opts() { return Array.from(select.options); }
+  function renderMenu() {
+    menu.innerHTML = "";
+    opts().forEach(opt => {
+      const item = document.createElement("div");
+      item.className = "cdrop-opt" + (opt.value === select.value ? " selected" : "");
+      item.textContent = opt.textContent;
+      item.dataset.value = opt.value;
+      item.addEventListener("click", (e) => {
+        e.stopPropagation();
+        select.value = opt.value;
+        select.dispatchEvent(new Event("change", { bubbles: true }));
+        refreshDisplay();
+        closeMenu();
+      });
+      menu.appendChild(item);
+    });
+  }
+  function refreshDisplay() {
+    const opt = opts().find(o => o.value === select.value) || opts()[0];
+    display.textContent = opt ? opt.textContent : "";
+  }
+  function onDocClick(e) { if (!wrap.contains(e.target)) closeMenu(); }
+  function openMenu() {
+    renderMenu();
+    menu.hidden = false;
+    wrap.classList.add("open");
+    document.addEventListener("click", onDocClick, true);
+  }
+  function closeMenu() {
+    menu.hidden = true;
+    wrap.classList.remove("open");
+    document.removeEventListener("click", onDocClick, true);
+  }
+  display.addEventListener("click", (e) => {
+    e.stopPropagation();
+    if (menu.hidden) openMenu(); else closeMenu();
+  });
+  display.addEventListener("keydown", (e) => {
+    if (e.key === "Enter" || e.key === " ") { e.preventDefault(); if (menu.hidden) openMenu(); else closeMenu(); }
+    else if (e.key === "Escape") closeMenu();
+    else if (e.key === "ArrowDown" || e.key === "ArrowUp") {
+      e.preventDefault();
+      const list = opts();
+      let idx = list.findIndex(o => o.value === select.value);
+      idx = e.key === "ArrowDown" ? Math.min(list.length - 1, idx + 1) : Math.max(0, idx - 1);
+      select.value = list[idx].value;
+      select.dispatchEvent(new Event("change", { bubbles: true }));
+      refreshDisplay();
+      if (!menu.hidden) renderMenu();
+    }
+  });
+  select._cdropRefresh = () => { refreshDisplay(); if (!menu.hidden) renderMenu(); };
+  refreshDisplay();
+}
 async function showAssignmentDialog(classId, existing) {
   const isEdit = !!existing;
   if (!isEdit) {
@@ -2803,6 +2908,10 @@ async function showAssignmentDialog(classId, existing) {
   const begRow = overlay.querySelector("#assignBegRow");
   const textRow = overlay.querySelector("#assignTextRow");
   const targetLabel = overlay.querySelector("#assignTargetLabel");
+  const begStageSel = overlay.querySelector("#assignBegStage");
+  enhanceSelect(typeSel);
+  enhanceSelect(lessonSourceSel);
+  enhanceSelect(begStageSel);
   function syncFields() {
     const t = typeSel.value;
     const src = lessonSourceSel.value;
@@ -2822,7 +2931,7 @@ async function showAssignmentDialog(classId, existing) {
       if (existing.lessonId === "custom") src = "custom";
       else if (existing.lessonId && existing.lessonId.indexOf("beg") === 0) src = "beg";
       lessonSourceSel.value = src;
-      if (src === "beg" && existing.lessonId) overlay.querySelector("#assignBegStage").value = existing.lessonId;
+      if (src === "beg" && existing.lessonId) begStageSel.value = existing.lessonId;
     }
     if (existing.target !== undefined) overlay.querySelector("#assignTarget").value = existing.target;
     if (existing.text) overlay.querySelector("#assignTextContent").value = existing.text;
@@ -2830,6 +2939,7 @@ async function showAssignmentDialog(classId, existing) {
     const d = new Date(existing.deadline);
     const pad = n => String(n).padStart(2, "0");
     overlay.querySelector("#assignDeadline").value = d.getFullYear() + "-" + pad(d.getMonth() + 1) + "-" + pad(d.getDate()) + "T" + pad(d.getHours()) + ":" + pad(d.getMinutes());
+    [typeSel, lessonSourceSel, begStageSel].forEach(s => s._cdropRefresh && s._cdropRefresh());
   }
   syncFields();
   overlay.querySelector("#assignCancelBtn").addEventListener("click", () => overlay.remove());
