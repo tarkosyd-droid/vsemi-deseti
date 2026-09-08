@@ -3408,7 +3408,9 @@ function randomCode() {
   let c = ""; for (let i = 0; i < 4; i++) c += chars[Math.floor(Math.random() * chars.length)];
   return c;
 }
-const MAX_PLAYERS = 30;
+const MAX_PLAYERS_CASUAL = 8;
+const MAX_PLAYERS_SCHOOL = 30;
+function lobbyMaxPlayers(meta) { return meta && meta.classId ? MAX_PLAYERS_SCHOOL : MAX_PLAYERS_CASUAL; }
 const COMPACT_FROM = 9;
 function lobbyRef(code, sub) { return fbdb.ref("lobby/" + code + (sub ? "/" + sub : "")); }
 async function readLobby(code, sub, fallback) {
@@ -3463,7 +3465,8 @@ async function attemptJoinLobby(code) {
   if (!meta) return { ok: false, message: "Lobby s tímto kódem neexistuje." };
   if (meta.status !== "waiting") return { ok: false, message: "Tenhle závod už běží, počkej na další kolo." };
   const existing = await getPlayers(code);
-  if (Object.keys(existing).length >= MAX_PLAYERS) return { ok: false, message: "Závod je plný — vejde se do něj " + MAX_PLAYERS + " hráčů." };
+  const maxP = lobbyMaxPlayers(meta);
+  if (Object.keys(existing).length >= maxP) return { ok: false, message: "Závod je plný — vejde se do něj " + maxP + " hráčů." };
   playerName = autoPlayerName(); playerId = uid(); lobbyCode = code; isHost = false;
   await joinLobbyAs(code);
   enterLobbyScreen();
@@ -3511,7 +3514,7 @@ function renderPlayers() {
     list.appendChild(li);
   });
   const cnt = playerCount();
-  document.getElementById("lobbyCount").textContent = cnt + " / " + MAX_PLAYERS + " hráčů";
+  document.getElementById("lobbyCount").textContent = cnt + " / " + lobbyMaxPlayers(lobbyMeta) + " hráčů";
 }
 let metaListenerRef = null, playersListenerRef = null, liveListenerRef = null;
 function startPolling() {
@@ -3882,7 +3885,7 @@ document.getElementById("crbJoin").addEventListener("click", async () => {
   if (!meta) { showToast("Závod už skončil."); return; }
   if (meta.status !== "waiting") { showToast("Závod už běží, počkej na další kolo."); return; }
   const existing = await getPlayers(code);
-  if (Object.keys(existing).length >= MAX_PLAYERS) { showToast("Závod je plný."); return; }
+  if (Object.keys(existing).length >= lobbyMaxPlayers(meta)) { showToast("Závod je plný."); return; }
   playerName = autoPlayerName(); playerId = uid(); lobbyCode = code; isHost = false;
   await joinLobbyAs(code);
   enterLobbyScreen();
