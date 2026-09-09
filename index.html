@@ -1718,6 +1718,15 @@ function updateStreak(profile) {
   profile.streak = profile.lastActiveDate === yesterday ? (profile.streak || 0) + 1 : 1;
   profile.lastActiveDate = today;
 }
+// zobrazovana sirka: pokud den vynechal (posledni aktivita neni dnes ani vcera), sipka uz je fakticky ztracena,
+// i kdyz se ulozeny profile.streak prepocita az pri dalsim cviceni
+function effectiveStreak(profile) {
+  if (!profile || !profile.lastActiveDate) return 0;
+  const today = todayStr();
+  const yesterday = new Date(Date.now() - 86400000).toISOString().slice(0, 10);
+  if (profile.lastActiveDate === today || profile.lastActiveDate === yesterday) return profile.streak || 0;
+  return 0;
+}
 function showToast(msg) {
   const t = document.createElement("div");
   t.className = "toast";
@@ -1775,7 +1784,7 @@ function renderProfile(profile) {
   levelEl.textContent = "Lv " + lvl;
   xpTextEl.textContent = into + " / " + need + " XP";
   xpFillEl.style.width = Math.round((into / need) * 100) + "%";
-  streakEl.innerHTML = svgIcon("flame",15) + " " + (profile.streak || 0) + " dní";
+  streakEl.innerHTML = svgIcon("flame",15) + " " + effectiveStreak(profile) + " dní";
   gridEl.innerHTML = "";
   BADGES.forEach(b => {
     const earned = (profile.badges || []).includes(b.id);
@@ -3249,7 +3258,7 @@ async function updateGoProfilePreview() {
   const profile = await loadProfile();
   const { level: lvl, into, need } = getLevelInfo(profile.xp || 0);
   document.getElementById("homeLevelText").textContent = "Lv " + lvl;
-  document.getElementById("homeStreakText").innerHTML = svgIcon("flame",15) + " " + (profile.streak || 0) + " dní";
+  document.getElementById("homeStreakText").innerHTML = svgIcon("flame",15) + " " + effectiveStreak(profile) + " dní";
   document.getElementById("homeXpFill").style.width = Math.round((into / need) * 100) + "%";
   document.getElementById("homeXpSub").textContent = into + " / " + need + " XP";
   const lessonsCount = profile.lessonsCompleted || 0;
@@ -3843,7 +3852,11 @@ document.getElementById("rematchBtn").addEventListener("click", async () => {
   await writeLobby(lobbyRef(lobbyCode, "live"), reset);
   // u skolniho zavodu se pri rematchi text vzdy prehodi, aby ho zaci nemeli uz nadrilovany z minula
   const metaPatch = { status: "waiting", startTime: null };
-  if (lobbyMeta && lobbyMeta.classId) metaPatch.customText = null;
+  if (lobbyMeta && lobbyMeta.classId) {
+    const picked = await pickClassRaceText(lobbyMeta.classId);
+    metaPatch.customText = picked.text;
+    fbdb.ref("classes/" + lobbyMeta.classId + "/lastRaceTextIdx").set(picked.idx).catch(() => {});
+  }
   await writeLobby(lobbyRef(lobbyCode, "meta"), metaPatch, true);
   enterLobbyScreen();
 });
@@ -4166,6 +4179,17 @@ document.getElementById("crbJoin").addEventListener("click", async () => {
   enterLobbyScreen();
 });
 
+// vybere nahodny zavodni text pro tridu tak, aby se neopakoval ten z posledniho zavodu (proti opisovani z pameti)
+async function pickClassRaceText(classId) {
+  let lastIdx = -1;
+  try {
+    const snap = await fbdb.ref("classes/" + classId + "/lastRaceTextIdx").get();
+    if (snap.exists()) lastIdx = snap.val();
+  } catch (e) { /* bez historie proste vybereme nahodne */ }
+  let idx = Math.floor(Math.random() * RACE_TEXTS.length);
+  if (RACE_TEXTS.length > 1) { while (idx === lastIdx) idx = Math.floor(Math.random() * RACE_TEXTS.length); }
+  return { text: RACE_TEXTS[idx], idx };
+}
 document.getElementById("startClassRaceBtn").addEventListener("click", async () => {
   const classId = currentClassDetailId;
   if (!classId) return;
@@ -4176,9 +4200,12 @@ document.getElementById("startClassRaceBtn").addEventListener("click", async () 
     code: lobbyCode, hostId: playerId, status: "waiting", startTime: null,
     duration: 45000, createdAt: Date.now(), classId: classId
   };
+  let pickedIdx = null;
   if (chosen) meta.customText = chosen.text;
+  else { const picked = await pickClassRaceText(classId); meta.customText = picked.text; pickedIdx = picked.idx; }
   const ok = await writeLobby(lobbyRef(lobbyCode, "meta"), meta);
   if (!ok) { showToast("Závod se nepodařilo založit."); return; }
+  if (pickedIdx !== null) fbdb.ref("classes/" + classId + "/lastRaceTextIdx").set(pickedIdx).catch(() => {});
   await joinLobbyAs(lobbyCode);
   try {
     await fbdb.ref("classes/" + classId + "/activeRace").set({
