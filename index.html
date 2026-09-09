@@ -969,6 +969,14 @@
     </div>
     <div class="class-actions" id="classActionsBar">
       <select id="classRaceTextSelect" class="race-text-select" style="display:none;"></select>
+      <select id="classRaceDurationSelect" class="race-text-select" style="display:none;">
+        <option value="30000">30 s</option>
+        <option value="45000" selected>45 s</option>
+        <option value="60000">60 s</option>
+        <option value="90000">90 s</option>
+        <option value="120000">120 s</option>
+      </select>
+      <textarea id="classRaceOwnText" placeholder="Napiš nebo vlož text, který mají žáci opisovat…" style="display:none; width:100%; min-height:60px; margin:8px 0; font-family:inherit; font-size:13px;"></textarea>
       <button class="btn-primary btn-compact" id="startClassRaceBtn">Spustit závod pro třídu</button>
       <button class="btn-ghost" id="exportCsvBtn">Export CSV</button>
       <button class="btn-ghost" id="exportPdfBtn">Export PDF</button>
@@ -2703,14 +2711,26 @@ function updateClassRaceSelect(isOwner, assignments) {
     .sort((a, b) => (a.createdAt || 0) - (b.createdAt || 0));
   window._currentClassTexts = list;
   const sel = document.getElementById("classRaceTextSelect");
-  if (isOwner && list.length) {
-    sel.innerHTML = '<option value="">Náhodný text</option>' + list.map(t => '<option value="' + t.id + '">' + (t.label || textPreview(t.text)) + '</option>').join("");
+  const durSel = document.getElementById("classRaceDurationSelect");
+  const ownTextEl = document.getElementById("classRaceOwnText");
+  if (isOwner) {
+    sel.innerHTML = '<option value="">Náhodný text</option>'
+      + list.map(t => '<option value="' + t.id + '">' + (t.label || textPreview(t.text)) + '</option>').join("")
+      + '<option value="__own__">✍️ Napsat vlastní text teď</option>';
     sel.style.display = "";
+    durSel.style.display = "";
+    ownTextEl.style.display = sel.value === "__own__" ? "" : "none";
   } else {
     sel.innerHTML = "";
     sel.style.display = "none";
+    durSel.style.display = "none";
+    ownTextEl.style.display = "none";
   }
 }
+document.getElementById("classRaceTextSelect").addEventListener("change", () => {
+  const sel = document.getElementById("classRaceTextSelect");
+  document.getElementById("classRaceOwnText").style.display = sel.value === "__own__" ? "" : "none";
+});
 const ASSIGNMENT_TYPES = {
   lesson: { name: "Zvládnutí lekce", unit: "% přesnost" },
   speed:  { name: "Rychlostní výzva", unit: "zn/min" }
@@ -3750,7 +3770,14 @@ function startPolling() {
   liveListenerRef = lobbyRef(lobbyCode, "live");
 
   metaListenerRef.on("value", (snap) => {
+    const hadMetaBefore = !!lobbyMeta;
     lobbyMeta = snap.val();
+    // zakladatel opustil cekarnu (nebo cely lobby zaznam zmizel) - ostatni hrace odpojime a upozornime je
+    if (!isHost && onScreen("lobby") && ((!lobbyMeta && hadMetaBefore) || (lobbyMeta && lobbyMeta.status === "cancelled"))) {
+      // odlozeno na dalsi tick, aby se nejdriv dokoncilo pripojovani vsech listeneru ve startPolling()
+      setTimeout(() => { showToast("Zakladatel opustil závod, byl jsi odpojen."); resetToHome(); }, 0);
+      return;
+    }
     if (!lobbyMeta) return;
     if (onScreen("lobby") && lobbyMeta.status === "playing") beginCountdownFromLobby(lobbyMeta);
     else if (onScreen("results") && lobbyMeta.status === "waiting") enterLobbyScreen();
@@ -3787,13 +3814,23 @@ document.getElementById("startBtn").addEventListener("click", async () => {
   await writeLobby(lobbyRef(lobbyCode, "meta"), patch, true);
   beginCountdownFromLobby(Object.assign({}, lobbyMeta, patch));
 });
-document.getElementById("leaveBtn").addEventListener("click", resetToHome);
+document.getElementById("leaveBtn").addEventListener("click", async () => {
+  if (isHost && lobbyCode && lobbyMeta && lobbyMeta.status === "waiting") {
+    // zakladatel opoustí čekárnu - dát vědět ostatním hráčům a uklidit celou lobby (vč. pozvánky pro třídu)
+    try { await lobbyRef(lobbyCode, "meta").update({ status: "cancelled" }); } catch (e) {}
+    try { await fbdb.ref("lobby/" + lobbyCode).remove(); } catch (e) {}
+  }
+  resetToHome();
+});
 document.getElementById("againBtn").addEventListener("click", resetToHome);
 document.getElementById("rematchBtn").addEventListener("click", async () => {
   const reset = {};
   Object.keys(lobbyPlayers).forEach(pid => { reset[pid] = { p: 0, w: 0, a: 100, f: false }; });
   await writeLobby(lobbyRef(lobbyCode, "live"), reset);
-  await writeLobby(lobbyRef(lobbyCode, "meta"), { status: "waiting", startTime: null }, true);
+  // u skolniho zavodu se pri rematchi text vzdy prehodi, aby ho zaci nemeli uz nadrilovany z minula
+  const metaPatch = { status: "waiting", startTime: null };
+  if (lobbyMeta && lobbyMeta.classId) metaPatch.customText = null;
+  await writeLobby(lobbyRef(lobbyCode, "meta"), metaPatch, true);
   enterLobbyScreen();
 });
 
@@ -4119,13 +4156,22 @@ document.getElementById("startClassRaceBtn").addEventListener("click", async () 
   const classId = currentClassDetailId;
   if (!classId) return;
   const sel = document.getElementById("classRaceTextSelect");
-  const chosen = sel && sel.value ? (window._currentClassTexts || []).find(t => t.id === sel.value) : null;
+  const durSel = document.getElementById("classRaceDurationSelect");
+  const ownTextEl = document.getElementById("classRaceOwnText");
+  let ownText = null;
+  if (sel && sel.value === "__own__") {
+    ownText = (ownTextEl.value || "").trim();
+    if (!ownText) { showToast("Napiš text, který mají žáci opisovat."); return; }
+  }
+  const chosen = sel && sel.value && sel.value !== "__own__" ? (window._currentClassTexts || []).find(t => t.id === sel.value) : null;
+  const dur = durSel && durSel.value ? parseInt(durSel.value, 10) : 45000;
   playerName = autoPlayerName(); playerId = uid(); lobbyCode = randomCode(); isHost = true;
   const meta = {
     code: lobbyCode, hostId: playerId, status: "waiting", startTime: null,
-    duration: 45000, createdAt: Date.now(), classId: classId
+    duration: dur, createdAt: Date.now(), classId: classId
   };
-  if (chosen) meta.customText = chosen.text;
+  if (ownText) meta.customText = ownText;
+  else if (chosen) meta.customText = chosen.text;
   const ok = await writeLobby(lobbyRef(lobbyCode, "meta"), meta);
   if (!ok) { showToast("Závod se nepodařilo založit."); return; }
   await joinLobbyAs(lobbyCode);
@@ -4186,7 +4232,8 @@ function beginRacing(startTime, duration, code, customText) {
       lobbyRef(lobbyCode, "live/" + playerId).update({
         p: Math.round((state.pos / state.text.length) * 100),
         w: computeCpm(state.correctKeys, elapsed),
-        a: computeAcc(state.correctKeys, state.totalKeys)
+        a: computeAcc(state.correctKeys, state.totalKeys),
+        ch: state.pos
       }).catch(() => {});
     },
     onFinish: async (state) => { await finishRace(state); }
@@ -4253,7 +4300,7 @@ async function finishRace(state) {
   const wpm = computeCpm(state.correctKeys, elapsed);
   const acc = computeAcc(state.correctKeys, state.totalKeys);
   const progress = Math.round((state.pos / state.text.length) * 100);
-  await writeLobby(lobbyRef(lobbyCode, "live/" + playerId), { p: progress, w: wpm, a: acc, f: state.finished }, true);
+  await writeLobby(lobbyRef(lobbyCode, "live/" + playerId), { p: progress, w: wpm, a: acc, f: state.finished, ch: state.pos }, true);
   if (cachedProfile && cachedProfile.nickname) {
     await writeLobby(lobbyRef(lobbyCode, "players/" + playerId + "/name"), cachedProfile.nickname);
   }
@@ -4268,18 +4315,18 @@ function renderResults() {
   const entries = Object.entries(lobbyPlayers)
     .map(([pid, p]) => {
       const v = lobbyLive[pid] || {};
-      return { pid, ...p, wpm: v.w || 0, acc: v.a || 0, progress: v.p || 0, finished: !!v.f };
+      return { pid, ...p, wpm: v.w || 0, acc: v.a || 0, progress: v.p || 0, chars: v.ch || 0, finished: !!v.f };
     })
     .sort((a, b) => {
       if (a.finished !== b.finished) return a.finished ? -1 : 1;
       if (a.finished && b.finished) return b.wpm - a.wpm;
-      return (b.progress || 0) - (a.progress || 0);
+      return (b.chars || 0) - (a.chars || 0);
     });
   entries.forEach((p, i) => {
     const li = document.createElement("li");
     if (i === 0) li.classList.add("podium-1");
     const medal = i === 0 ? svgIcon("medalGold",14) + " " : i === 1 ? svgIcon("medalSilver",14) + " " : i === 2 ? svgIcon("medalBronze",14) + " " : "";
-    const detail = p.finished ? (p.wpm + " zn/min · " + p.acc + "%") : ((p.progress || 0) + "% textu");
+    const detail = p.finished ? (p.wpm + " zn/min · " + p.acc + "%") : ((p.chars || 0) + " znaků (" + (p.progress || 0) + "%)");
     li.innerHTML = '<span class="rank">' + medal + (i + 1) + '</span>'
       + '<span class="lname with-avatar"><span class="mini-avatar">' + avatarInner(p) + '</span>' + p.name + (p.pid === playerId ? " (ty)" : "") + '</span>'
       + '<span class="lscore">' + detail + '</span>';
