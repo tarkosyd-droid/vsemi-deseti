@@ -2480,10 +2480,14 @@ function renderAdminLicenseBox() {
     + '<div id="adminLicenseList" style="margin-top:10px;"></div>';
   document.getElementById("adminGenLicenseBtn").addEventListener("click", async () => {
     const nameInput = document.getElementById("adminLicenseSchoolName");
-    const code = await generateLicenseCode(nameInput.value.trim());
-    nameInput.value = "";
-    showToast("Kód vygenerován: " + code);
-    renderAdminLicenseList();
+    try {
+      const code = await generateLicenseCode(nameInput.value.trim());
+      nameInput.value = "";
+      showToast("Kód vygenerován: " + code);
+      renderAdminLicenseList();
+    } catch (e) {
+      showToast("Kód se nepodařilo vygenerovat (chybí oprávnění v databázi).");
+    }
   });
   renderAdminLicenseList();
 }
@@ -3667,6 +3671,15 @@ function randomCode() {
   let c = ""; for (let i = 0; i < 4; i++) c += chars[Math.floor(Math.random() * chars.length)];
   return c;
 }
+// overi, ze kod jeste nikdo nepouziva (aktivni lobby), a pripadne zkusi znovu - proti (velmi male, ale nenulove) sanci kolize
+async function uniqueLobbyCode() {
+  for (let i = 0; i < 5; i++) {
+    const c = randomCode();
+    try { const existing = await getMeta(c); if (!existing) return c; }
+    catch (e) { return c; } // radsi zavod spustit s neoverenym kodem nez ho kvuli chybe site nedovolit vubec
+  }
+  return randomCode() + Math.floor(Math.random() * 9);
+}
 const MAX_PLAYERS_CASUAL = 8;
 const MAX_PLAYERS_SCHOOL = 30;
 function lobbyMaxPlayers(meta) { return meta && meta.classId ? MAX_PLAYERS_SCHOOL : MAX_PLAYERS_CASUAL; }
@@ -3702,7 +3715,7 @@ function playerAvatarFields() {
   return f;
 }
 async function createLobbyAsHost() {
-  playerName = autoPlayerName(); playerId = uid(); lobbyCode = randomCode(); isHost = true;
+  playerName = autoPlayerName(); playerId = uid(); lobbyCode = await uniqueLobbyCode(); isHost = true;
   const ok = await writeLobby(lobbyRef(lobbyCode, "meta"), {
     code: lobbyCode, hostId: playerId, status: "waiting", startTime: null, duration: 45000, createdAt: Date.now()
   });
@@ -4201,7 +4214,7 @@ document.getElementById("startClassRaceBtn").addEventListener("click", async () 
   if (!classId) return;
   const sel = document.getElementById("classRaceTextSelect");
   const chosen = sel && sel.value ? (window._currentClassTexts || []).find(t => t.id === sel.value) : null;
-  playerName = autoPlayerName(); playerId = uid(); lobbyCode = randomCode(); isHost = true;
+  playerName = autoPlayerName(); playerId = uid(); lobbyCode = await uniqueLobbyCode(); isHost = true;
   const meta = {
     code: lobbyCode, hostId: playerId, status: "waiting", startTime: null,
     duration: 45000, createdAt: Date.now(), classId: classId
