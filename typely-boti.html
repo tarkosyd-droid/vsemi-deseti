@@ -1,0 +1,210 @@
+<!doctype html>
+<html lang="cs">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Typely – testovací boti do závodu</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/firebase/10.13.2/firebase-app-compat.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/firebase/10.13.2/firebase-database-compat.min.js"></script>
+<style>
+  :root { color-scheme: dark; }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; background: #0f0f12; color: #e8e8ec; font-family: -apple-system, 'Segoe UI', Inter, sans-serif;
+    padding: 24px 16px; display: flex; justify-content: center;
+  }
+  .card {
+    width: 100%; max-width: 480px; background: #1c1c20; border: 1px solid #2c2c33; border-radius: 16px;
+    padding: 24px; box-shadow: 0 20px 60px -20px rgba(0,0,0,0.6);
+  }
+  h1 { font-size: 20px; margin: 0 0 4px; }
+  p.sub { color: #9a9aa4; font-size: 13.5px; margin: 0 0 18px; line-height: 1.5; }
+  .note {
+    background: rgba(111,140,255,0.1); border: 1px solid rgba(111,140,255,0.3); border-radius: 10px;
+    padding: 12px 14px; font-size: 13px; color: #c7cfff; margin-bottom: 18px; line-height: 1.5;
+  }
+  label { display: block; font-size: 12px; color: #9a9aa4; text-transform: uppercase; letter-spacing: 0.06em; margin: 14px 0 6px; }
+  input[type=text], input[type=number] {
+    width: 100%; font-size: 16px; padding: 11px 13px; border-radius: 10px; margin: 0;
+    border: 1px solid #34343c; background: #141417; color: #e8e8ec; outline: none;
+  }
+  input#codeInput { text-transform: uppercase; letter-spacing: 3px; font-family: monospace; }
+  input:focus { border-color: #6f8cff; }
+  .row { display: flex; gap: 10px; }
+  .row > div { flex: 1; }
+  button {
+    font-size: 14.5px; font-weight: 600; padding: 12px 16px; border-radius: 10px; border: none;
+    cursor: pointer; width: 100%; margin-top: 16px;
+  }
+  .btn-primary { background: linear-gradient(135deg, #6f8cff, #b06fff); color: #060714; }
+  .btn-primary:disabled { opacity: 0.4; cursor: not-allowed; }
+  .btn-danger { background: rgba(255,107,125,0.14); color: #ff6b7d; border: 1px solid rgba(255,107,125,0.35); }
+  #log {
+    margin-top: 18px; background: #101013; border: 1px solid #26262c; border-radius: 10px;
+    padding: 10px 12px; font-family: monospace; font-size: 12px; color: #9a9aa4; max-height: 220px;
+    overflow-y: auto; white-space: pre-wrap; line-height: 1.5;
+  }
+  .stat-row { display: flex; gap: 10px; margin-top: 14px; }
+  .stat { flex: 1; background: #141417; border: 1px solid #26262c; border-radius: 10px; padding: 10px 12px; text-align: center; }
+  .stat b { display: block; font-size: 20px; }
+  .stat span { font-size: 11px; color: #9a9aa4; text-transform: uppercase; letter-spacing: 0.05em; }
+</style>
+</head>
+<body>
+  <div class="card">
+    <h1>🤖 Boti do závodu</h1>
+    <p class="sub">Přidá do lobby na typely.cz falešné hráče, kteří sami "píšou" – pro otestování, jak vypadá závod s víc lidmi.</p>
+    <div class="note">
+      <strong>Důležité:</strong> obyčejné lobby (tlačítko „Vytvořit lobby") má strop jen <strong>8 hráčů</strong>. Na 20 lidí musíš závod spustit přes školu (tlačítko „Spustit závod pro třídu" ve třídě) – tam je strop 30.
+    </div>
+    <label for="codeInput">Kód lobby</label>
+    <input type="text" id="codeInput" maxlength="6" placeholder="např. X4D6">
+    <div class="row">
+      <div>
+        <label for="botCount">Počet botů</label>
+        <input type="number" id="botCount" value="19" min="1" max="29">
+      </div>
+    </div>
+    <button class="btn-primary" id="startBtn">Přidat boty do lobby</button>
+    <button class="btn-danger" id="stopBtn" style="display:none;">Odebrat boty a zastavit</button>
+    <div class="stat-row">
+      <div class="stat"><b id="statJoined">0</b><span>Botů v lobby</span></div>
+      <div class="stat"><b id="statFinished">0</b><span>Dokončilo</span></div>
+      <div class="stat"><b id="statStatus">–</b><span>Stav závodu</span></div>
+    </div>
+    <div id="log"></div>
+  </div>
+
+<script>
+const firebaseConfig = {
+  apiKey: "AIzaSyDYMFmP5A-PP76xrXNtcXOrVdptEzb5154",
+  authDomain: "psanideseti-ddf0e.firebaseapp.com",
+  databaseURL: "https://psanideseti-ddf0e-default-rtdb.europe-west1.firebasedatabase.app",
+  projectId: "psanideseti-ddf0e",
+};
+firebase.initializeApp(firebaseConfig);
+const db = firebase.database();
+
+const logEl = document.getElementById("log");
+function log(msg) {
+  const t = new Date().toLocaleTimeString("cs-CZ");
+  logEl.textContent += "[" + t + "] " + msg + "\n";
+  logEl.scrollTop = logEl.scrollHeight;
+}
+
+let code = null;
+let botIds = [];
+let metaRef = null;
+let finishedCount = 0;
+let raceArmed = false; // aby se stejny start neodpalil vicekrat
+const botTimers = {};
+
+document.getElementById("startBtn").addEventListener("click", async () => {
+  const codeVal = document.getElementById("codeInput").value.trim().toUpperCase();
+  const count = Math.max(1, Math.min(29, parseInt(document.getElementById("botCount").value, 10) || 19));
+  if (!codeVal) { log("Zadej kód lobby."); return; }
+  code = codeVal;
+  document.getElementById("startBtn").disabled = true;
+  document.getElementById("startBtn").textContent = "Přidávám...";
+
+  try {
+    const metaSnap = await db.ref("lobby/" + code + "/meta").get();
+    if (!metaSnap.exists()) { log("Lobby s kódem " + code + " neexistuje (nebo už skončila). Zkontroluj kód."); resetStartBtn(); return; }
+  } catch (e) { log("Nepodařilo se ověřit lobby: " + e.message); resetStartBtn(); return; }
+
+  botIds = [];
+  for (let i = 1; i <= count; i++) {
+    const id = "bot_" + Math.random().toString(36).slice(2, 9);
+    botIds.push(id);
+    try {
+      await db.ref("lobby/" + code + "/players/" + id).set({ name: "Bot " + i });
+    } catch (e) { log("Bot " + i + " se nepřipojil: " + e.message); }
+  }
+  log(botIds.length + " botů přidáno do lobby " + code + ". Teď klidně spusť závod normálně na typely.cz.");
+  document.getElementById("statJoined").textContent = botIds.length;
+  document.getElementById("startBtn").style.display = "none";
+  document.getElementById("stopBtn").style.display = "";
+
+  watchMeta();
+});
+
+function resetStartBtn() {
+  document.getElementById("startBtn").disabled = false;
+  document.getElementById("startBtn").textContent = "Přidat boty do lobby";
+}
+
+function watchMeta() {
+  metaRef = db.ref("lobby/" + code + "/meta");
+  metaRef.on("value", (snap) => {
+    const meta = snap.val();
+    if (!meta) { document.getElementById("statStatus").textContent = "zrušeno"; return; }
+    document.getElementById("statStatus").textContent =
+      meta.status === "playing" ? "běží" : meta.status === "waiting" ? "čeká" : meta.status;
+    if (meta.status === "playing" && !raceArmed) {
+      raceArmed = true;
+      finishedCount = 0;
+      document.getElementById("statFinished").textContent = "0";
+      log("Závod odstartoval, boti začínají psát...");
+      runBots(meta.startTime || Date.now(), meta.duration || 60000);
+    }
+    if (meta.status === "waiting" && raceArmed) {
+      raceArmed = false; // pripraveno na dalsi kolo (rematch)
+      Object.values(botTimers).forEach(clearInterval);
+      log("Čeká se na další kolo.");
+    }
+  });
+}
+
+function runBots(startTime, duration) {
+  const endTime = startTime + (duration || 60000);
+  botIds.forEach((id) => {
+    const targetChars = 180 + Math.floor(Math.random() * 260); // 180-440 znaku
+    const cpm = 120 + Math.floor(Math.random() * 380); // 120-500 zn/min
+    const acc = 84 + Math.floor(Math.random() * 16); // 84-100 %
+    let done = false;
+    const timer = setInterval(async () => {
+      const now = Date.now();
+      if (now < startTime) return;
+      const elapsedMin = (now - startTime) / 60000;
+      let pos = Math.min(targetChars, Math.round(cpm * elapsedMin));
+      const timeUp = now >= endTime;
+      const finishedNow = pos >= targetChars;
+      if (finishedNow || timeUp) done = true;
+      const p = Math.round((pos / targetChars) * 100);
+      try {
+        await db.ref("lobby/" + code + "/live/" + id).update({
+          p: p, w: cpm, a: acc, ch: pos, f: finishedNow
+        });
+      } catch (e) { /* ignoruj prubezne chyby zapisu */ }
+      if (done) {
+        clearInterval(timer);
+        delete botTimers[id];
+        finishedCount++;
+        document.getElementById("statFinished").textContent = finishedCount;
+      }
+    }, 650 + Math.random() * 400);
+    botTimers[id] = timer;
+  });
+}
+
+document.getElementById("stopBtn").addEventListener("click", async () => {
+  document.getElementById("stopBtn").disabled = true;
+  document.getElementById("stopBtn").textContent = "Odebírám...";
+  Object.values(botTimers).forEach(clearInterval);
+  if (metaRef) metaRef.off();
+  for (const id of botIds) {
+    try { await db.ref("lobby/" + code + "/players/" + id).remove(); } catch (e) {}
+    try { await db.ref("lobby/" + code + "/live/" + id).remove(); } catch (e) {}
+  }
+  log("Všichni boti odebráni z lobby " + code + ".");
+  botIds = [];
+  document.getElementById("statJoined").textContent = "0";
+  document.getElementById("stopBtn").style.display = "none";
+  document.getElementById("startBtn").style.display = "";
+  resetStartBtn();
+  document.getElementById("stopBtn").disabled = false;
+  document.getElementById("stopBtn").textContent = "Odebrat boty a zastavit";
+});
+</script>
+</body>
+</html>

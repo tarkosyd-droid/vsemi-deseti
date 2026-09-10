@@ -494,6 +494,14 @@
   .friend-action-btn:hover { border-color: var(--accent); }
   .friend-remove { color: var(--tx2); cursor: pointer; font-weight: 700; padding: 4px 6px; }
   .friend-remove:hover { color: #ff6b6b; }
+  /* prava strana radku ukolu - stav/odznak vlevo, akcni ikony (tuzka+krizek) pohromade vpravo, ne rozhozene po celem radku */
+  .assign-right { display: flex; align-items: center; gap: 14px; flex-shrink: 0; }
+  .assign-actions { display: flex; align-items: center; gap: 2px; }
+  .icon-btn {
+    background: none; border: none; cursor: pointer; color: var(--tx2); font-size: 15px;
+    padding: 4px 6px; border-radius: 6px; line-height: 1;
+  }
+  .icon-btn:hover { color: var(--accent); background: rgba(111,140,255,0.12); }
   .friends-empty { font-size: 13px; color: var(--tx2); padding: 8px 2px; }
   .tag { font-size: 11px; color: var(--tx2); background: #2a2a2f; padding: 3px 9px; border-radius: 20px; margin-right: 6px; }
   .backlink {
@@ -1499,8 +1507,9 @@ function playRewardSound() {
 }
 
 /* ---------- celebration overlays (level up / badge / streak) ---------- */
-const CELEBRATION_BLOCK_MS = 3000;
-const CELEBRATION_AUTO_MS = 4200;
+// vsechny oslavne animace trvaji stejne dlouho (5s); kliknuti kamkoliv na obrazovku je hned zavre
+// a az potom (fronta - celebrationBusy) nastoupi dalsi cekajici animace, aby se nikdy neprekryvaly
+const CELEBRATION_AUTO_MS = 5000;
 let celebrationBusy = false;
 const celebrationQueue = [];
 function queueCelebration(buildInner, opts) {
@@ -1519,16 +1528,16 @@ function runCelebrationQueue() {
   fireConfetti();
   playRewardSound();
   if (opts.onMount) opts.onMount(overlay);
-  let dismissable = false;
+  let autoTimer = null;
   const finish = () => {
     if (!overlay.parentNode) return;
+    if (autoTimer) clearTimeout(autoTimer);
     overlay.remove();
     celebrationBusy = false;
     runCelebrationQueue();
   };
-  overlay.addEventListener("click", () => { if (dismissable) finish(); });
-  setTimeout(() => { dismissable = true; }, opts.blockMs || CELEBRATION_BLOCK_MS);
-  setTimeout(finish, opts.autoMs || CELEBRATION_AUTO_MS);
+  overlay.addEventListener("click", finish);
+  autoTimer = setTimeout(finish, opts.autoMs || CELEBRATION_AUTO_MS);
 }
 function showBadgeEarned(b) {
   queueCelebration(() => '<div class="lu-icon-wrap"><div class="lu-icon">' + (b.icon && b.icon.indexOf("<svg") === 0 ? b.icon : "🏅") + '</div></div>'
@@ -1556,8 +1565,6 @@ function showStreakCelebration(days) {
       + '<p class="lu-sub">Trénuješ v kuse ' + days + ' ' + pluralDni(days) + '. Nenech to přerušit!</p>',
     {
       cardClass: "streak-card",
-      blockMs: 4200,
-      autoMs: 6200,
       onMount: (overlay) => {
         const numEl = overlay.querySelector("#streakNumEl");
         const lineEl = overlay.querySelector("#streakUnderlinePath");
@@ -2881,8 +2888,8 @@ function renderClassAssignments(classId, isOwner, assignments, members) {
       const doneCount = Object.values(a.progress || {}).filter(p => p && p.done).length;
       const studentClickable = !isOwner && (a.type === "lesson" || a.type === "speed");
       const rightSide = isOwner
-        ? '<span class="best">' + doneCount + '/' + memberCount + ' splnilo</span><button class="icon-btn" data-edit="' + a.id + '" title="Upravit úkol" style="background:none; border:none; cursor:pointer; color:var(--tx2); font-size:15px; padding:2px 6px;">✎</button><span class="friend-remove" data-del="' + a.id + '" title="Smazat úkol">✕</span>'
-        : (() => { const s = assignmentStatus(a, currentUser && currentUser.uid); return '<span class="assign-status ' + s.cls + '">' + s.text + '</span>' + (studentClickable ? '<span class="best">Procvičit →</span>' : ''); })();
+        ? '<div class="assign-right"><span class="best">' + doneCount + '/' + memberCount + ' splnilo</span><div class="assign-actions"><button class="icon-btn" data-edit="' + a.id + '" title="Upravit úkol">✎</button><span class="friend-remove" data-del="' + a.id + '" title="Smazat úkol">✕</span></div></div>'
+        : '<div class="assign-right">' + (() => { const s = assignmentStatus(a, currentUser && currentUser.uid); return '<span class="assign-status ' + s.cls + '">' + s.text + '</span>' + (studentClickable ? '<span class="best">Procvičit →</span>' : ''); })() + '</div>';
       const rowCls = (isOwner || studentClickable) ? "lesson-row" : "lesson-row static-row";
       return '<div class="' + rowCls + '" data-aidx="' + i + '"><span class="name">' + (a.label || ASSIGNMENT_TYPES[a.type].name) + '<br><span class="hint" style="font-size:12px;">' + assignmentDesc(a) + ' · do ' + formatDeadline(a.deadline) + '</span></span>' + rightSide + '</div>';
     }).join("") + '</div>';
