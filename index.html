@@ -2680,10 +2680,14 @@ async function renderClassSection(profile) {
       if (left) renderClassSection(profile);
     });
   } else {
-    joinBox.style.display = "";
+    // ucitel se nemuze pripojit do cizi tridy jako zak - vidi jen zalozeni vlastni tridy
+    joinBox.style.display = isTeacherRole ? "none" : "";
     myClassBox.style.display = "none";
-    if (introEl) introEl.style.display = "";
-    if (dividerEl) dividerEl.style.display = isTeacherRole ? "" : "none";
+    if (introEl) {
+      introEl.style.display = "";
+      introEl.textContent = isTeacherRole ? "Založ třídu pro svoje žáky." : "Přidej se do třídy pomocí kódu od učitele.";
+    }
+    if (dividerEl) dividerEl.style.display = "none"; // uz neni co rozdelovat - kazda role vidi jen jednu moznost
     if (createGroupEl) createGroupEl.style.display = isTeacherRole ? "" : "none";
   }
   if (!isTeacherRole) document.getElementById("createClassBtn").style.display = "none";
