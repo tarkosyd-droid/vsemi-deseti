@@ -3162,10 +3162,6 @@ async function showAssignmentDialog(classId, existing) {
   overlay.innerHTML = '<div class="levelup-card form-card" style="cursor:default; width:100%; max-width:460px; text-align:left;">'
     + '<p class="lu-title" style="margin-bottom:14px;">' + (isEdit ? "Upravit úkol" : "Nový úkol") + '</p>'
     + '<div class="assign-form">'
-    + '<div><label>Typ úkolu</label><select id="assignType">'
-    + '<option value="lesson">Zvládnutí lekce</option>'
-    + '<option value="speed">Rychlostní výzva</option>'
-    + '</select></div>'
     + '<div id="assignLessonRow"><label>Zdroj textu</label><select id="assignLessonSource">'
     + '<option value="long">Dlouhý text</option>'
     + '<option value="custom">Vlastní text</option>'
@@ -3182,18 +3178,20 @@ async function showAssignmentDialog(classId, existing) {
     + '<button class="btn-primary" id="assignCreateBtn" style="margin-bottom:0;">' + (isEdit ? "Uložit" : "Vytvořit") + '</button>'
     + '</div></div></div>';
   document.body.appendChild(overlay);
-  const typeSel = overlay.querySelector("#assignType");
+  // "Rychlostní výzva" uz nejde nove zalozit (typ ukolu byl zjednoduseny na jediny, vyber se odstranil),
+  // ale stary ukol tohoto typu (existing.type === "speed") se porad musi dat upravit - proto currentType
+  // drzi typ interne, misto aby se cetl z (uz neexistujiciho) <select id="assignType">.
+  const currentType = (isEdit && existing.type) ? existing.type : "lesson";
   const lessonRow = overlay.querySelector("#assignLessonRow");
   const lessonSourceSel = overlay.querySelector("#assignLessonSource");
   const begRow = overlay.querySelector("#assignBegRow");
   const textRow = overlay.querySelector("#assignTextRow");
   const targetLabel = overlay.querySelector("#assignTargetLabel");
   const begStageSel = overlay.querySelector("#assignBegStage");
-  enhanceSelect(typeSel);
   enhanceSelect(lessonSourceSel);
   enhanceSelect(begStageSel);
   function syncFields() {
-    const t = typeSel.value;
+    const t = currentType;
     const src = lessonSourceSel.value;
     const isCustomLesson = t === "lesson" && src === "custom";
     const isBegLesson = t === "lesson" && src === "beg";
@@ -3202,10 +3200,8 @@ async function showAssignmentDialog(classId, existing) {
     textRow.style.display = (isCustomLesson || t === "speed") ? "" : "none";
     targetLabel.textContent = t === "lesson" ? "Cílová přesnost (%)" : "Cílová rychlost (zn/min)";
   }
-  typeSel.addEventListener("change", syncFields);
   lessonSourceSel.addEventListener("change", syncFields);
   if (isEdit) {
-    typeSel.value = existing.type;
     if (existing.type === "lesson") {
       let src = "long";
       if (existing.lessonId === "custom") src = "custom";
@@ -3219,13 +3215,13 @@ async function showAssignmentDialog(classId, existing) {
     const d = new Date(existing.deadline);
     const pad = n => String(n).padStart(2, "0");
     overlay.querySelector("#assignDeadline").value = d.getFullYear() + "-" + pad(d.getMonth() + 1) + "-" + pad(d.getDate()) + "T" + pad(d.getHours()) + ":" + pad(d.getMinutes());
-    [typeSel, lessonSourceSel, begStageSel].forEach(s => s._cdropRefresh && s._cdropRefresh());
+    [lessonSourceSel, begStageSel].forEach(s => s._cdropRefresh && s._cdropRefresh());
   }
   syncFields();
   overlay.querySelector("#assignCancelBtn").addEventListener("click", () => overlay.remove());
   overlay.querySelector("#assignCreateBtn").addEventListener("click", async () => {
     const errEl = overlay.querySelector("#assignErr");
-    const type = typeSel.value;
+    const type = currentType;
     const deadlineVal = overlay.querySelector("#assignDeadline").value;
     const label = overlay.querySelector("#assignLabel").value.trim();
     const target = parseInt(overlay.querySelector("#assignTarget").value, 10);
