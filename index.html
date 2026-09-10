@@ -530,13 +530,20 @@
   #classRaceBanner .crb-close {
     border: none; background: transparent; color: #080b1a; font-size: 15px; cursor: pointer; padding: 4px 6px;
   }
-  .race-timer-row { display: flex; justify-content: center; margin-bottom: 14px; }
+  /* pribito na obrazovku (ne v toku stranky), at je videt porad, i kdyz se u vic hracu strankou roluje */
+  .race-timer-row {
+    position: fixed; top: 14px; left: 50%; transform: translateX(-50%); z-index: 40;
+    margin: 0; pointer-events: none;
+  }
   .race-timer-row #raceTimeLeft {
+    display: inline-block; pointer-events: auto;
     font-family: 'JetBrains Mono', monospace; font-size: 22px; font-weight: 700; letter-spacing: 0.03em;
     background: #202024; border: 1px solid var(--line); border-radius: 999px; padding: 5px 20px; color: var(--tx);
+    box-shadow: 0 10px 28px -10px rgba(0,0,0,0.7);
   }
   .race-timer-row #raceTimeLeft.time-low { color: #ff6b7d; border-color: rgba(255,107,125,0.5); animation: timeLowPulse 1s ease-in-out infinite; }
   @keyframes timeLowPulse { 50% { opacity: 0.45; } }
+  #raceTrack { margin-top: 56px; }
   .lane-rank { display: inline-block; min-width: 18px; color: var(--tx2); font-weight: 700; margin-right: 2px; }
   .lane.lane-me .lane-rank { color: var(--accent); }
   .track { display: flex; flex-direction: column; gap: 16px; margin-bottom: 20px; }
@@ -4680,7 +4687,9 @@ function renderResults() {
       + '<span class="lscore">' + detail + '</span>';
     list.appendChild(li);
   });
-  if (entries.length && entries[0].pid === playerId && entries[0].finished) {
+  // renderResults() se vola znovu pri kazde zive aktualizaci (i kdyz jen jiny hrac dopise) - bez tohohle
+  // pojistky by konfety vybuchly znovu pri kazdem takovem prekresleni a se spoustou hracu to zabilo obrazovku
+  if (entries.length && entries[0].pid === playerId && entries[0].finished && !winRecorded) {
     fireConfetti();
     checkChampionBadge(entries[0].wpm, entries[0].acc);
   }
