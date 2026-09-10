@@ -4497,6 +4497,7 @@ function beginRacing(startTime, duration, code, customText, timedMode) {
   const kbEl = document.getElementById("raceKeyboard");
   const raceText = customText || RACE_TEXTS[(hashCode(code + ":" + startTime) >>> 0) % RACE_TEXTS.length];
   laneEls = {};
+  lastTrackOrder = [];
   document.getElementById("raceTrack").innerHTML = "";
   buildRaceTrack();
   const endTime = startTime + duration;
@@ -4588,6 +4589,7 @@ function updateRaceTimerDisplay(remainMs) {
 // s vic hraci se ukazuje jen zebricek nejrychlejsich (+ vzdy vlastni pruh), at se nemusi rolovat pres 20 lidi
 const RACE_TRACK_MAX = 8;
 let raceRankTimer = null;
+let lastTrackOrder = [];
 function rankedPids() {
   return Object.keys(lobbyPlayers).sort((a, b) => {
     const va = lobbyLive[a] || {}, vb = lobbyLive[b] || {};
@@ -4623,6 +4625,10 @@ function refreshRaceTrack() {
   Object.keys(laneEls).forEach(pid => {
     if (!lobbyPlayers[pid] || !visibleSet.has(pid)) { laneEls[pid].root.remove(); delete laneEls[pid]; }
   });
+  // preskladat DOM (appendChild) jen kdyz se poradi radku fakt zmenilo - s hodne hraci se
+  // tenhle refresh spousti kazdejch 700ms a zbytecne prerovnavani zpusobovalo trhany vykon
+  const orderChanged = visible.length !== lastTrackOrder.length || visible.some((pid, i) => pid !== lastTrackOrder[i]);
+  lastTrackOrder = visible.slice();
   visible.forEach((pid) => {
     const p = lobbyPlayers[pid];
     if (!p) return;
@@ -4642,7 +4648,7 @@ function refreshRaceTrack() {
         rank: lane.querySelector(".lane-rank")
       };
     }
-    el.appendChild(laneEls[pid].root); // appendChild na uz pripojeny prvek ho jen presune na spravne poradi
+    if (orderChanged) el.appendChild(laneEls[pid].root); // appendChild na uz pripojeny prvek ho jen presune na spravne poradi
     laneEls[pid].rank.textContent = rankOf[pid] + ".";
     updateLane(pid);
   });
@@ -4714,7 +4720,7 @@ function resetToHome() {
     lobbyRef(code, "players/" + pid).remove().catch(() => {});
     lobbyRef(code, "live/" + pid).remove().catch(() => {});
   }
-  lobbyMeta = null; lobbyPlayers = {}; lobbyLive = {}; laneEls = {};
+  lobbyMeta = null; lobbyPlayers = {}; lobbyLive = {}; laneEls = {}; lastTrackOrder = [];
   stopPolling();
   if (gameTimer) clearInterval(gameTimer);
   if (countdownTimer) clearInterval(countdownTimer);
