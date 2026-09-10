@@ -969,6 +969,7 @@
           <p class="lb-title"><svg width="18" height="18" viewBox="0 0 24 24" style="vertical-align:-2px;"><path d="M12 2l8 3v6c0 5-3.5 8.5-8 11-4.5-2.5-8-6-8-11V5l8-3z" fill="currentColor"/></svg> Účet</p>
           <input type="text" id="authEmail" placeholder="E-mail" autocomplete="username">
           <input type="password" id="authPassword" placeholder="Heslo (min. 6 znaků)" autocomplete="current-password">
+          <input type="password" id="authPasswordConfirm" placeholder="Heslo znovu (jen pro registraci)" autocomplete="new-password">
           <div style="display:flex; gap:8px;">
             <button class="btn-primary" id="authLoginBtn" style="margin-bottom:0;">Přihlásit</button>
             <button class="btn-secondary" id="authRegisterBtn" style="margin-bottom:0;">Registrovat</button>
@@ -1124,7 +1125,7 @@
     <div class="beginner-grid" id="beginnerList"></div>
     <p class="hint" style="text-align:left; margin-top:14px; line-height:1.6;">
       Tyhle kroky tě naučí 26 písmen bez háčku i s háčkem/čárkou (ě š č ř ž ý á í é ů ú).
-      Písmena <b>ď, ť, ň</b> a <b>ó</b> se ale píšou přes tzv. mrtvou klávesu (nejdřív háček, pak písmeno), což je jiný typ úkonu, který tenhle kurz zatím neučí. Návod, jak na ně, najdeš
+      Písmena <b>ď, ť, ň</b> a <b>ó</b> se ale píšou přes tzv. mrtvou klávesu (nejdřív háček, pak písmeno), což je jiný typ úkonu, který tenhle kurz neučí. Návod, jak na ně, najdeš
       <a href="https://www.krcmic.cz/jak-se-pise-d-t-n/" target="_blank" rel="noopener" style="color:var(--accent);">tady</a>.
     </p>
   </div>
@@ -1785,8 +1786,10 @@ document.getElementById("authLoginBtn").addEventListener("click", async () => {
 document.getElementById("authRegisterBtn").addEventListener("click", async () => {
   const email = document.getElementById("authEmail").value.trim();
   const pass = document.getElementById("authPassword").value;
+  const passConfirm = document.getElementById("authPasswordConfirm").value;
   const err = document.getElementById("authErr");
   err.textContent = "";
+  if (pass !== passConfirm) { err.textContent = "Hesla se neshodují, zkontroluj obě pole."; return; }
   try { await fbauth.createUserWithEmailAndPassword(email, pass); }
   catch (e) { console.error("Auth error:", e.code, e.message); err.textContent = translateAuthError(e); }
 });
@@ -2031,7 +2034,7 @@ function askNickname(currentUid) {
     overlay.className = "levelup-overlay";
     overlay.innerHTML = '<div class="levelup-card" style="cursor:default;">'
       + '<div class="lu-icon">👋</div>'
-      + '<p class="lu-title">Jak se budeš jmenovat?</p>'
+      + '<p class="lu-title">Jak se ti budeme říkat?</p>'
       + '<p class="lu-sub" style="margin-bottom:14px;">Tahle přezdívka se bude zobrazovat v žebříčku a v závodech.</p>'
       + '<input type="text" id="nicknamePromptInput" placeholder="Tvoje přezdívka" maxlength="16" style="text-align:center; margin-bottom:8px;">'
       + '<p class="hint" id="nicknamePromptErr" style="display:none; color:#ff6b6b; margin:0 0 8px;"></p>'
