@@ -2844,7 +2844,11 @@ async function openClassDetail(classId, className) {
     }
     const members = data.members || {};
     const rows = Object.keys(members).map(uid => Object.assign({ uid: uid }, members[uid])).sort((a, b) => (b.xp || 0) - (a.xp || 0));
-    renderClassAssignments(classId, isOwner, data.assignments || {}, members);
+    if (!isOwner && isMember && currentUser) {
+      const myProfile = await loadProfile();
+      currentClassAssignments = await retroSyncBeginnerAssignments(myProfile, classId, data.assignments || {}, currentUser.uid);
+    }
+    renderClassAssignments(classId, isOwner, currentClassAssignments, members);
     document.getElementById("classDetailCount").textContent = pluralZaci(rows.length);
     const tableEl = document.getElementById("classRosterTable");
     if (!rows.length) {
@@ -3199,6 +3203,27 @@ async function showAssignmentDialog(classId, existing) {
       openClassDetail(classId, document.getElementById("classDetailTitle").textContent);
     } catch (e) { errEl.textContent = "Úkol se nepodařilo uložit."; }
   });
+}
+// kdyz zak krok "Zacinam od nuly" (napr. f,j) uz drive dokoncil - jeste pred tim, nez ucitel
+// zadal ukol na tenhle krok - checkClassAssignments to nikdy nezachyti, protoze ta funkce
+// porovnava jen prave dokoncenou lekci s aktivnimi ukoly v tu chvili. Bez tohohle zpetneho
+// dohledani by ukol navzdy zustal "Aktivni", i kdyz zak pozadovany krok uz davno umi.
+async function retroSyncBeginnerAssignments(profile, classId, assignments, uid) {
+  if (!assignments || !classId || !uid) return assignments;
+  const now = Date.now();
+  for (const id of Object.keys(assignments)) {
+    const a = assignments[id];
+    if (!a || a.type !== "lesson" || !a.lessonId || a.lessonId.indexOf("beg") !== 0) continue;
+    if (a.deadline && a.deadline < now) continue;
+    const prog = (a.progress && a.progress[uid]) || {};
+    if (prog.done) continue;
+    if (stageLevelDone(profile, a.lessonId) >= 3) {
+      const doneEntry = { done: true, completedAt: now };
+      try { await fbdb.ref("classes/" + classId + "/assignments/" + id + "/progress/" + uid).set(doneEntry); } catch (e) {}
+      assignments[id] = Object.assign({}, a, { progress: Object.assign({}, a.progress || {}, { [uid]: doneEntry }) });
+    }
+  }
+  return assignments;
 }
 async function checkClassAssignments(profile, ctx) {
   if (!profile.classId || !currentUser) return;
