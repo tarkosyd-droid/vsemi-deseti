@@ -969,6 +969,7 @@
           <p class="lb-title"><svg width="18" height="18" viewBox="0 0 24 24" style="vertical-align:-2px;"><path d="M12 2l8 3v6c0 5-3.5 8.5-8 11-4.5-2.5-8-6-8-11V5l8-3z" fill="currentColor"/></svg> Účet</p>
           <input type="text" id="authEmail" placeholder="E-mail" autocomplete="username">
           <input type="password" id="authPassword" placeholder="Heslo (min. 6 znaků)" autocomplete="current-password">
+          <input type="password" id="authPasswordConfirm" placeholder="Heslo znovu (jen pro registraci)" autocomplete="new-password">
           <div style="display:flex; gap:8px;">
             <button class="btn-primary" id="authLoginBtn" style="margin-bottom:0;">Přihlásit</button>
             <button class="btn-secondary" id="authRegisterBtn" style="margin-bottom:0;">Registrovat</button>
@@ -1785,8 +1786,10 @@ document.getElementById("authLoginBtn").addEventListener("click", async () => {
 document.getElementById("authRegisterBtn").addEventListener("click", async () => {
   const email = document.getElementById("authEmail").value.trim();
   const pass = document.getElementById("authPassword").value;
+  const passConfirm = document.getElementById("authPasswordConfirm").value;
   const err = document.getElementById("authErr");
   err.textContent = "";
+  if (pass !== passConfirm) { err.textContent = "Hesla se neshodují, zkontroluj obě pole."; return; }
   try { await fbauth.createUserWithEmailAndPassword(email, pass); }
   catch (e) { console.error("Auth error:", e.code, e.message); err.textContent = translateAuthError(e); }
 });
@@ -2186,6 +2189,9 @@ async function recordResult({ cpm, acc, lessonId, isRace, won, textLength, timeM
   profile.sumCpm = (profile.sumCpm || 0) + (cpm || 0);
   profile.sumAcc = (profile.sumAcc || 0) + (acc || 0);
   profile.totalTimeMs = (profile.totalTimeMs || 0) + (timeMs || 0);
+  const cpmDay = ensureCpmDaily(profile);
+  const cpmPrevBest = cpmDay.prevBest || 0;
+  if ((cpm || 0) > cpmDay.best) cpmDay.best = cpm || 0;
   if (beginnerStage) {
     profile.beginnerLevels = profile.beginnerLevels || {};
     const key = "beg" + beginnerStage;
@@ -2232,7 +2238,7 @@ async function recordResult({ cpm, acc, lessonId, isRace, won, textLength, timeM
   }
   if (newlyEarned.length) showBadgesEarned(newlyEarned);
   if (streakContinued) showStreakCelebration(profile.streak);
-  const { bonus: questBonus, completed: questsCompleted } = updateDailyQuests(profile, { cpm, acc, isRace });
+  const { bonus: questBonus, completed: questsCompleted } = updateDailyQuests(profile, { cpm, acc, isRace, textLength, cpmPrevBest });
   if (questBonus > 0) profile.xp += questBonus;
   await saveProfile(profile);
   renderProfile(profile);
@@ -2286,12 +2292,41 @@ BADGES.push(...THEME_BADGES);
 const QUEST_POOL = [
   { id: "finish2", type: "finish_n", target: 2, label: "Dokonči 2 lekce (+40 XP)" },
   { id: "finish3", type: "finish_n", target: 3, label: "Dokonči 3 lekce (+40 XP)" },
-  { id: "speed40", type: "speed_target", target: 40, label: "Dosáhni 40 zn/min (+40 XP)" },
-  { id: "speed60", type: "speed_target", target: 60, label: "Dosáhni 60 zn/min (+40 XP)" },
   { id: "speed80", type: "speed_target", target: 80, label: "Dosáhni 80 zn/min (+40 XP)" },
   { id: "perfect1", type: "perfect", target: 1, label: "Dokonči lekci na 100 % (+40 XP)" },
   { id: "race1", type: "race_play", target: 1, label: "Odjeď 1 závod (+40 XP)" },
+  { id: "acc95", type: "acc_target", target: 95, label: "Dokonči lekci s přesností aspoň 95 % (+40 XP)" },
+  { id: "volume500", type: "chars_total", target: 500, label: "Napiš dnes aspoň 500 znaků celkem (+40 XP)" },
+  { id: "beatYesterday5", type: "beat_yesterday", target: 5, label: "Zlepši si dnešní nejlepší rychlost o 5 zn/min oproti včerejšku (+40 XP)" },
+  { id: "friendChallenge", type: "friend_challenge", target: 1, label: "Vyzvi kamaráda na závod (+40 XP)" },
 ];
+// drzi nejlepsi rychlost za dnesek a vcerejsek (pro quest "zlepsi se oproti vcerejsku") -
+// pri prechodu na novy den se dnesni "best" presune do "prevBest" a "best" se vynuluje
+function ensureCpmDaily(profile) {
+  const today = todayStr();
+  if (!profile.cpmDaily || profile.cpmDaily.date !== today) {
+    const prevBest = profile.cpmDaily ? profile.cpmDaily.best : 0;
+    profile.cpmDaily = { date: today, best: 0, prevBest: prevBest };
+  }
+  return profile.cpmDaily;
+}
+// splneni questu, ktere nevznikaji z vysledku lekce/zavodu (napr. pozvani kamarada na zavod) -
+// normalni updateDailyQuests() se vola jen z recordResult, tohle je samostatny hak pro jednorazove akce
+async function completeQuestByType(type, label) {
+  if (!currentUser) return;
+  const profile = await loadProfile();
+  const dq = ensureDailyQuests(profile);
+  let bonus = 0;
+  dq.quests.forEach(q => {
+    if (!q.done && q.type === type) { q.progress = q.target; q.done = true; bonus += 40; }
+  });
+  if (bonus > 0) {
+    profile.xp = (profile.xp || 0) + bonus;
+    await saveProfile(profile);
+    showToast("Splněný úkol: " + label + " (+40 XP)");
+    if (currentScreenId === "home") renderQuests(dq);
+  }
+}
 let cachedProfile = null;
 function isoWeekKey(d) {
   const date = new Date(d);
@@ -2325,6 +2360,9 @@ function updateDailyQuests(profile, ctx) {
     if (q.type === "speed_target" && ctx.cpm >= q.target) q.progress = q.target;
     if (q.type === "perfect" && ctx.acc === 100) q.progress = q.target;
     if (q.type === "race_play" && ctx.isRace) q.progress = Math.min(q.target, q.progress + 1);
+    if (q.type === "acc_target" && ctx.acc >= q.target) q.progress = q.target;
+    if (q.type === "chars_total") q.progress = Math.min(q.target, (q.progress || 0) + (ctx.textLength || 0));
+    if (q.type === "beat_yesterday" && ctx.cpmPrevBest > 0 && ctx.cpm >= ctx.cpmPrevBest + q.target) q.progress = q.target;
     if (q.progress >= q.target && !q.done) { q.done = true; bonus += 40; completed.push(q); }
   });
   return { bonus, completed };
@@ -2422,6 +2460,7 @@ async function renderFriendsList(profile) {
         code: lobbyCode, createdAt: Date.now()
       }).catch(() => {});
       showToast("Pozvánka odeslána");
+      completeQuestByType("friend_challenge", "Vyzvi kamaráda na závod");
       enterLobbyScreen();
     });
   });
