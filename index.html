@@ -1096,6 +1096,12 @@
         <button type="button" class="btn-primary btn-compact" id="modeNormalBtn" style="flex:1;">Normální</button>
         <button type="button" class="btn-secondary btn-compact" id="modeTimedBtn" style="flex:1;">Časový</button>
       </div>
+      <div id="teacherSpectateBox" style="display:none; margin:2px 0 10px;">
+        <label style="display:flex; align-items:center; gap:8px; font-size:13px; color:var(--tx2); cursor:pointer;">
+          <input type="checkbox" id="teacherPlayCheck" style="width:auto; margin:0;">
+          Hrát s žáky
+        </label>
+      </div>
       <div id="timedOptionsBox" style="display:none;">
         <select id="raceDurationSelect" class="race-text-select">
           <option value="30000">30 s</option>
@@ -1108,7 +1114,8 @@
           <option value="long">Dlouhý text</option>
           <option value="own">Vlastní text</option>
         </select>
-        <textarea id="raceOwnTextArea" placeholder="Napiš nebo vlož text, který se má opisovat…" style="display:none; width:100%; min-height:60px; margin:8px 0; font-family:inherit; font-size:13px;"></textarea>
+        <textarea id="raceOwnTextArea" maxlength="2000" placeholder="Napiš nebo vlož text, který se má opisovat… (max. 2000 znaků)" style="display:none; width:100%; min-height:60px; margin:8px 0; font-family:inherit; font-size:13px;"></textarea>
+        <p class="hint" id="raceOwnTextCount" style="display:none; margin:-4px 0 8px; text-align:right;"></p>
       </div>
     </div>
     <button class="btn-primary" id="startBtn">Spustit závod</button>
@@ -3682,6 +3689,7 @@ async function writeLobby(ref, value, merge) {
 let playerId = null, playerName = "", lobbyCode = null, isHost = false;
 let gameTimer = null, countdownTimer = null;
 let raceEngine = null, raceSubmitted = false, winRecorded = false, lastProgressSent = 0;
+let isSpectator = false; // ucitel muze zavod jen sledovat, bez toho aby sam zavodil se zaky
 let laneEls = {};
 let lobbyMeta = null, lobbyPlayers = {}, lobbyLive = {};
 
@@ -3761,6 +3769,8 @@ function enterLobbyScreen() {
   document.getElementById("startErr").style.display = "none";
   document.getElementById("raceModeBox").style.display = isHost ? "" : "none";
   if (isHost) setRaceMode("normal");
+  isSpectator = false;
+  document.getElementById("teacherPlayCheck").checked = false;
   document.getElementById("lobbyHint").textContent = isHost
     ? "Pošli tento kód ostatním hráčům a pak závod spusť."
     : "Čekáš v lobby " + lobbyCode + ".";
@@ -3799,6 +3809,8 @@ function startPolling() {
       return;
     }
     if (!lobbyMeta) return;
+    const teacherBox = document.getElementById("teacherSpectateBox");
+    if (teacherBox) teacherBox.style.display = (isHost && lobbyMeta.classId && onScreen("lobby")) ? "" : "none";
     if (onScreen("lobby") && lobbyMeta.status === "playing") beginCountdownFromLobby(lobbyMeta);
     else if (onScreen("results") && lobbyMeta.status === "waiting") enterLobbyScreen();
   });
@@ -3843,7 +3855,16 @@ document.getElementById("startBtn").addEventListener("click", async () => {
       patch.customText = buildLongRaceText(lobbyCode + ":" + patch.startTime);
     }
   }
-  await writeLobby(lobbyRef(lobbyCode, "meta"), patch, true);
+  const playCheck = document.getElementById("teacherPlayCheck");
+  // ucitel u skolniho zavodu ve vychozim stavu jen sleduje, hrat s zaky si musi vyslovne zaskrtnout
+  isSpectator = !!(lobbyMeta && lobbyMeta.classId && isHost && !(playCheck && playCheck.checked));
+  if (isSpectator) {
+    // ucitel jen sleduje - nema vlastni policko v zavode, jen se divá na postup zaku
+    try { await lobbyRef(lobbyCode, "players/" + playerId).remove(); } catch (e) {}
+    try { await lobbyRef(lobbyCode, "live/" + playerId).remove(); } catch (e) {}
+  }
+  const ok = await writeLobby(lobbyRef(lobbyCode, "meta"), patch, true);
+  if (!ok) { errEl.textContent = "Závod se nepodařilo spustit, zkus to znovu."; errEl.style.display = ""; return; }
   beginCountdownFromLobby(Object.assign({}, lobbyMeta, patch));
 });
 document.getElementById("leaveBtn").addEventListener("click", async () => {
@@ -4248,7 +4269,14 @@ document.getElementById("modeTimedBtn").addEventListener("click", () => setRaceM
 document.getElementById("raceTextSourceSelect").addEventListener("change", () => {
   const src = document.getElementById("raceTextSourceSelect").value;
   document.getElementById("raceOwnTextArea").style.display = src === "own" ? "" : "none";
+  document.getElementById("raceOwnTextCount").style.display = src === "own" ? "" : "none";
+  updateOwnTextCount();
 });
+function updateOwnTextCount() {
+  const len = document.getElementById("raceOwnTextArea").value.length;
+  document.getElementById("raceOwnTextCount").textContent = len + " / 2000 znaků";
+}
+document.getElementById("raceOwnTextArea").addEventListener("input", updateOwnTextCount);
 
 function beginCountdownFromLobby(lobby) {
   if (document.getElementById("screen-countdown").style.display !== "none"
@@ -4272,11 +4300,34 @@ function beginRacing(startTime, duration, code, customText) {
   const textEl = document.getElementById("raceText");
   const outerEl = document.getElementById("raceTextOuter");
   const kbEl = document.getElementById("raceKeyboard");
-  buildKeyboard(kbEl);
   const raceText = customText || RACE_TEXTS[(hashCode(code + ":" + startTime) >>> 0) % RACE_TEXTS.length];
   laneEls = {};
   document.getElementById("raceTrack").innerHTML = "";
   buildRaceTrack();
+  const endTime = startTime + duration;
+  if (isSpectator) {
+    // ucitel jen sleduje - zadny vlastni vstup, jen tabulka pruhu zaku a jejich zivy postup
+    raceEngine = null;
+    document.getElementById("raceProgressRow").style.display = "none";
+    outerEl.style.display = "none";
+    kbEl.style.display = "none";
+    document.getElementById("raceInput").style.display = "none";
+    document.getElementById("raceHint").textContent = "👀 Sleduješ závod jako učitel.";
+    gameTimer = setInterval(() => {
+      if (Date.now() >= endTime) {
+        clearInterval(gameTimer);
+        renderResults();
+        setTimeout(() => { show("results", { replace: true }); startPolling(); }, 650);
+      }
+    }, 200);
+    return;
+  }
+  document.getElementById("raceProgressRow").style.display = "";
+  outerEl.style.display = "";
+  kbEl.style.display = "";
+  document.getElementById("raceInput").style.display = "";
+  document.getElementById("raceHint").textContent = "Piš co nejrychleji a nejpřesněji.";
+  buildKeyboard(kbEl);
   raceEngine = makeTypingEngine({
     text: raceText, textEl, outerEl, keyboardEl: kbEl,
     onRender: (state) => {
@@ -4305,7 +4356,6 @@ function beginRacing(startTime, duration, code, customText) {
   document.getElementById("screen-race").addEventListener("click", () => input.focus());
   input.addEventListener("keydown", raceKeyHandler);
 
-  const endTime = startTime + duration;
   gameTimer = setInterval(async () => {
     const remainMs = endTime - Date.now();
     if (remainMs <= 0) { clearInterval(gameTimer); if (!raceEngine.state.finished) await finishRace(raceEngine.state); }
@@ -4411,7 +4461,7 @@ function resetToHome() {
   stopPolling();
   if (gameTimer) clearInterval(gameTimer);
   if (countdownTimer) clearInterval(countdownTimer);
-  lobbyCode = null; playerId = null; isHost = false;
+  lobbyCode = null; playerId = null; isHost = false; isSpectator = false;
   document.getElementById("homeErr").textContent = "";
   show("home");
 }
