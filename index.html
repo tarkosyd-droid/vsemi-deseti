@@ -3696,6 +3696,7 @@ function show(id, opts) {
   if (id === "profile") loadHomeProfile();
   if (id === "school") loadProfile().then(renderClassSection);
   if (id === "beginner") renderBeginnerList();
+  if (id === "lessons") renderLessonList();
   if (!suppressHistoryPush) {
     if (opts && opts.replace) {
       history.replaceState({ screen: id }, "", "#" + id);
