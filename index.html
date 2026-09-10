@@ -2138,14 +2138,14 @@ function showConfirm(title, message) {
     overlay.addEventListener("click", () => { overlay.remove(); resolve(false); });
   });
 }
-function showTrialOfferDialog() {
+function showTrialOfferDialog(subtitle) {
   return new Promise((resolve) => {
     const overlay = document.createElement("div");
     overlay.className = "levelup-overlay";
     overlay.innerHTML = '<div class="levelup-card" style="cursor:default;">'
       + '<div class="lu-icon">🏫</div>'
       + '<p class="lu-title" style="font-size:19px;">Funkce pro školu jsou prémiové</p>'
-      + '<p class="lu-sub" style="margin-bottom:16px;">Založení a správa třídy je placená funkce. Můžeš si ji ale nejdřív ' + SCHOOL_TRIAL_DAYS + ' dní vyzkoušet úplně zdarma, bez zadávání kódu.</p>'
+      + '<p class="lu-sub" style="margin-bottom:16px;">' + (subtitle || ('Založení a správa třídy je placená funkce. Můžeš si ji ale nejdřív ' + SCHOOL_TRIAL_DAYS + ' dní vyzkoušet úplně zdarma, bez zadávání kódu.')) + '</p>'
       + '<div style="display:flex; gap:10px;">'
       + '<button class="btn-secondary" id="trialOfferNoBtn" style="margin-bottom:0;">Zrušit</button>'
       + '<button class="btn-primary" id="trialOfferYesBtn" style="margin-bottom:0;">Vyzkoušet ' + SCHOOL_TRIAL_DAYS + ' dní zdarma</button>'
@@ -2711,19 +2711,16 @@ async function renderClassSection(profile) {
   document.getElementById("createClassBtn").style.display = "";
   const licenseBox = document.getElementById("schoolLicenseStatusBox");
   if (licenseBox) {
-    if (isTeacherRole) {
-      await ensureGrandfatheredAccess(profile);
-      const status = schoolAccessStatus(profile);
-      const html = schoolLicenseStatusHtml(status);
-      licenseBox.innerHTML = html;
-      licenseBox.style.display = html ? "" : "none";
-      const trialBuyBtn = document.getElementById("trialStatusBuyBtn");
-      if (trialBuyBtn) trialBuyBtn.addEventListener("click", () => showSchoolPaywall(profile));
-      refreshTrialNotifState(profile);
-    } else {
-      licenseBox.style.display = "none";
-      licenseBox.innerHTML = "";
-    }
+    // licence/trial se ted tyka i zaku (musi se pripojit do tridy), ne jen ucitelu - pilulka se
+    // zobrazuje obema rolim, kdykoliv uz maji nejaky schoolAccess zaznam (trial/licence)
+    if (isTeacherRole) await ensureGrandfatheredAccess(profile);
+    const status = schoolAccessStatus(profile);
+    const html = schoolLicenseStatusHtml(status);
+    licenseBox.innerHTML = html;
+    licenseBox.style.display = html ? "" : "none";
+    const trialBuyBtn = document.getElementById("trialStatusBuyBtn");
+    if (trialBuyBtn) trialBuyBtn.addEventListener("click", () => showSchoolPaywall(profile));
+    refreshTrialNotifState(profile);
   }
   if (profile.classId) {
     // sebe-oprava: pokud uz uroste neni clenem (ucitel ho odebral), lokalne to zjistime a uklidime
@@ -2831,6 +2828,22 @@ document.getElementById("joinClassBtn").addEventListener("click", async () => {
     return;
   }
   if (!code) return;
+  // pripojeni do tridy je ted taky premiova funkce (stejne jako zalozeni) - i zak potrebuje
+  // aktivni licenci/trial, ne jen ucitel
+  let gateProfile = await loadProfile();
+  let gateStatus = schoolAccessStatus(gateProfile);
+  if (!gateStatus.ok) {
+    if (gateStatus.type === "none") {
+      const wantsTrial = await showTrialOfferDialog("Přidání do třídy je prémiová funkce. Můžeš si ji ale nejdřív " + SCHOOL_TRIAL_DAYS + " dní vyzkoušet úplně zdarma, bez zadávání kódu.");
+      if (!wantsTrial) return;
+      gateProfile.schoolAccess = { type: "trial", startedAt: Date.now(), expiresAt: Date.now() + SCHOOL_TRIAL_MS };
+      await saveProfile(gateProfile);
+      refreshTrialNotifState(gateProfile);
+    } else {
+      showSchoolPaywall(gateProfile);
+      return;
+    }
+  }
   try {
     const snap = await fbdb.ref("classInvites/" + code).get();
     if (!snap.exists()) {
