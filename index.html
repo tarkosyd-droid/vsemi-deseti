@@ -969,7 +969,6 @@
           <p class="lb-title"><svg width="18" height="18" viewBox="0 0 24 24" style="vertical-align:-2px;"><path d="M12 2l8 3v6c0 5-3.5 8.5-8 11-4.5-2.5-8-6-8-11V5l8-3z" fill="currentColor"/></svg> Účet</p>
           <input type="text" id="authEmail" placeholder="E-mail" autocomplete="username">
           <input type="password" id="authPassword" placeholder="Heslo (min. 6 znaků)" autocomplete="current-password">
-          <input type="password" id="authPasswordConfirm" placeholder="Heslo znovu (jen pro registraci)" autocomplete="new-password">
           <div style="display:flex; gap:8px;">
             <button class="btn-primary" id="authLoginBtn" style="margin-bottom:0;">Přihlásit</button>
             <button class="btn-secondary" id="authRegisterBtn" style="margin-bottom:0;">Registrovat</button>
@@ -1786,10 +1785,8 @@ document.getElementById("authLoginBtn").addEventListener("click", async () => {
 document.getElementById("authRegisterBtn").addEventListener("click", async () => {
   const email = document.getElementById("authEmail").value.trim();
   const pass = document.getElementById("authPassword").value;
-  const passConfirm = document.getElementById("authPasswordConfirm").value;
   const err = document.getElementById("authErr");
   err.textContent = "";
-  if (pass !== passConfirm) { err.textContent = "Hesla se neshodují, zkontroluj obě pole."; return; }
   try { await fbauth.createUserWithEmailAndPassword(email, pass); }
   catch (e) { console.error("Auth error:", e.code, e.message); err.textContent = translateAuthError(e); }
 });
