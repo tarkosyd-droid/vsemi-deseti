@@ -915,7 +915,7 @@
             <button class="board-tab" id="tabFriends">Přátelé</button>
           </div>
           <div id="homeLeaderboard"><p class="hint" style="margin:0;">Načítám…</p></div>
-          <p class="hint" style="margin-top:16px; margin-bottom:0;">Počítají se jen Volné texty, dlouhé texty a závody (krátké dril lekce se do žebříčku nezapočítávají).</p>
+          <p class="hint" style="margin-top:16px; margin-bottom:0;">Počítají se jen Krátké texty, dlouhé texty a závody (cvičné lekce na jednotlivé znaky se do žebříčku nezapočítávají).</p>
         </div>
       </div>
     </div>
@@ -1163,7 +1163,7 @@
       </div>
       <div id="normalOptionsBox" style="display:none;">
         <select id="raceNormalTextSourceSelect" class="race-text-select">
-          <option value="random" selected>Volný text</option>
+          <option value="random" selected>Krátký text</option>
           <option value="long">Dlouhý text</option>
           <option value="own">Vlastní text</option>
         </select>
@@ -1353,7 +1353,7 @@ const LESSONS = [
     "V horské chatě strávili turisté celý týden bez elektřiny a signálu. Ráno vstávali se sluncem, vařili kávu na kamnech a plánovali trasu na další den. Procházeli hlubokými lesy, kde potkávali srnky i divoké kachny na horských jezerech. Večer si u ohně opékali brambory a povídali si o životě ve městě, který se jim zdál najednou velmi vzdálený. Když se po týdnu vraceli domů, slíbili si, že se na hory vrátí co nejdřív.",
     "Malé knihkupectví v centru města bojovalo o přežití mezi velkými řetězci. Majitelka každý týden pořádala autorská čtení a snažila se přilákat mladé čtenáře pestrou nabídkou akcí. Pomalu si vybudovala věrnou skupinu zákazníků, kteří k ní chodili nejen pro knihy, ale i na kávu a povídání. Jednoho dne jí místní noviny věnovaly celou stránku a zájem o obchod prudce vzrostl. Konečně měla pocit, že se její úsilí vyplatilo."
   ]},
-  { id: "free", name: "Volný text", texts: null },
+  { id: "free", name: "Krátké texty", texts: null },
 ];
 const RACE_TEXTS = [
   "Rychlá liška přeběhla přes pole a schovala se v hustém lese, kde na ni čekala stará sova a moudrý ježek.",
@@ -2417,7 +2417,7 @@ function bindAddFriendHandler() {
     }
     const found = await findPlayerByName(name);
     if (!found) {
-      errEl.textContent = "Hráč s tímto jménem nebyl nalezen v žebříčku. Musí mít aspoň jeden výsledek (Volný text, dlouhý text nebo závod).";
+      errEl.textContent = "Hráč s tímto jménem nebyl nalezen v žebříčku. Musí mít aspoň jeden výsledek (Krátký text, dlouhý text nebo závod).";
       errEl.style.display = "";
       return;
     }
@@ -2485,7 +2485,14 @@ async function ensureGrandfatheredAccess(profile) {
 function schoolAccessStatus(profile) {
   const a = profile.schoolAccess;
   if (!a) return { ok: false, type: "none" };
-  if (a.type === "grandfathered" || a.type === "licensed") return { ok: true, type: a.type };
+  if (a.type === "grandfathered") return { ok: true, type: a.type };
+  if (a.type === "licensed") {
+    // bez expiresAt = licence na dobu neurcitou (drivejsi kody i "bez omezeni" v adminu)
+    if (!a.expiresAt) return { ok: true, type: "licensed" };
+    const remaining = a.expiresAt - Date.now();
+    if (remaining > 0) return { ok: true, type: "licensed", expiresAt: a.expiresAt, daysLeft: Math.max(1, Math.ceil(remaining / 86400000)) };
+    return { ok: false, type: "licensed_expired", expiresAt: a.expiresAt };
+  }
   if (a.type === "trial") {
     const remaining = a.expiresAt - Date.now();
     if (remaining > 0) return { ok: true, type: "trial", expiresAt: a.expiresAt, daysLeft: Math.max(1, Math.ceil(remaining / 86400000)) };
@@ -2504,20 +2511,30 @@ async function redeemLicenseCode(profile, rawCode) {
     if (lic.revoked) return { ok: false, message: "Tenhle kód už není platný." };
     // kod je sdileny za celou skolu - muze ho pouzit vic uctu najednou (ucitele i zaci)
     await fbdb.ref("schoolLicenses/" + code + "/redeemedBy/" + currentUser.uid).set(Date.now());
-    profile.schoolAccess = { type: "licensed", code: code, activatedAt: Date.now() };
+    // platnost se pocita od chvile, kdy si kod skola fakt aktivuje, ne od vygenerovani v adminu
+    const access = { type: "licensed", code: code, activatedAt: Date.now() };
+    if (lic.validDays) access.expiresAt = Date.now() + lic.validDays * 86400000;
+    profile.schoolAccess = access;
     await saveProfile(profile);
     return { ok: true };
   } catch (e) { return { ok: false, message: "Kód se nepodařilo ověřit, zkus to znovu." }; }
 }
-async function generateLicenseCode(schoolName) {
+async function generateLicenseCode(schoolName, validDays) {
   const code = "SKOLA-" + Math.random().toString(36).slice(2, 6).toUpperCase() + "-" + Math.random().toString(36).slice(2, 6).toUpperCase();
-  await fbdb.ref("schoolLicenses/" + code).set({ schoolName: schoolName || "", createdAt: Date.now() });
+  await fbdb.ref("schoolLicenses/" + code).set({ schoolName: schoolName || "", createdAt: Date.now(), validDays: validDays || 0 });
   return code;
 }
 function pluralDni(n) { return n === 1 ? "den" : (n >= 2 && n <= 4 ? "dny" : "dní"); }
 function schoolLicenseStatusHtml(status) {
   if (status.type === "grandfathered") return "";
-  if (status.type === "licensed") return '<div class="license-active-pill">✓ Licence pro školu je aktivní</div>';
+  if (status.type === "licensed") {
+    const expiryTxt = status.daysLeft ? " · platnost vyprší za " + status.daysLeft + " " + pluralDni(status.daysLeft) : "";
+    return '<div class="license-active-pill">✓ Licence pro školu je aktivní' + expiryTxt + '</div>';
+  }
+  if (status.type === "licensed_expired") return '<div class="trial-status-pill expired" id="trialStatusPill">'
+    + '<span class="tsp-text">⚠️ Platnost licence vypršela</span>'
+    + '<button class="tsp-buy" id="trialStatusBuyBtn">Prodloužit licenci →</button>'
+    + '</div>';
   if (status.type === "trial") return '<div class="trial-status-pill" id="trialStatusPill">'
     + '<span class="tsp-text">⏳ Zkušební verze: zbývá ' + status.daysLeft + ' ' + pluralDni(status.daysLeft) + '</span>'
     + '<button class="tsp-buy" id="trialStatusBuyBtn">Koupit licenci →</button>'
@@ -2569,7 +2586,8 @@ async function renderAdminLicenseList() {
       const l = all[code];
       const count = l.redeemedBy ? Object.keys(l.redeemedBy).length : 0;
       const status = count ? (count + "× aktivováno") : "zatím nepoužitý";
-      return '<div class="lesson-row static-row"><span class="name">' + code + (l.schoolName ? ' <span class="hint">(' + l.schoolName + ')</span>' : '') + '</span><span class="best">' + status + '</span></div>';
+      const durTxt = l.validDays ? (l.validDays + " dní od aktivace") : "bez omezení";
+      return '<div class="lesson-row static-row"><span class="name">' + code + (l.schoolName ? ' <span class="hint">(' + l.schoolName + ')</span>' : '') + ' <span class="hint">· ' + durTxt + '</span></span><span class="best">' + status + '</span></div>';
     }).join("") : '<p class="hint">Zatím žádné kódy.</p>';
   } catch (e) { listEl.innerHTML = '<p class="hint">Kódy se nepodařilo načíst.</p>'; }
 }
@@ -2579,12 +2597,24 @@ function renderAdminLicenseBox() {
   if (!isAdminUser()) { box.style.display = "none"; box.innerHTML = ""; return; }
   box.style.display = "";
   box.innerHTML = '<p class="lb-title" style="margin:14px 0 10px;">' + svgIcon("target", 18) + ' Licence pro školy (admin)</p>'
-    + '<div style="display:flex; gap:8px;"><input type="text" id="adminLicenseSchoolName" placeholder="Název školy (nepovinné)" style="flex:1;"><button class="btn-secondary btn-compact" id="adminGenLicenseBtn" style="margin-bottom:0;">+ Vygenerovat kód</button></div>'
+    + '<div style="display:flex; gap:8px; flex-wrap:wrap;">'
+    + '<input type="text" id="adminLicenseSchoolName" placeholder="Název školy (nepovinné)" style="flex:1; min-width:140px;">'
+    + '<select id="adminLicenseDuration" class="race-text-select" style="flex:0 0 auto; width:auto;">'
+    + '<option value="30">1 měsíc</option>'
+    + '<option value="90">3 měsíce</option>'
+    + '<option value="180">6 měsíců</option>'
+    + '<option value="365" selected>1 rok</option>'
+    + '<option value="0">Bez omezení</option>'
+    + '</select>'
+    + '<button class="btn-secondary btn-compact" id="adminGenLicenseBtn" style="margin-bottom:0;">+ Vygenerovat kód</button>'
+    + '</div>'
     + '<div id="adminLicenseList" style="margin-top:10px;"></div>';
   document.getElementById("adminGenLicenseBtn").addEventListener("click", async () => {
     const nameInput = document.getElementById("adminLicenseSchoolName");
+    const durSel = document.getElementById("adminLicenseDuration");
+    const validDays = durSel ? parseInt(durSel.value, 10) : 365;
     try {
-      const code = await generateLicenseCode(nameInput.value.trim());
+      const code = await generateLicenseCode(nameInput.value.trim(), validDays);
       nameInput.value = "";
       showToast("Kód vygenerován: " + code);
       renderAdminLicenseList();
