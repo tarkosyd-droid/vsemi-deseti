@@ -4596,8 +4596,8 @@ function rankedPids() {
     return (vb.w || 0) - (va.w || 0);
   });
 }
-function visiblePids() {
-  const ranked = rankedPids();
+function visiblePids(ranked) {
+  ranked = ranked || rankedPids();
   const top = ranked.slice(0, RACE_TRACK_MAX);
   if (playerId && lobbyPlayers[playerId] && !top.includes(playerId)) {
     return ranked.slice(0, RACE_TRACK_MAX - 1).concat([playerId]);
@@ -4611,13 +4611,19 @@ function buildRaceTrack() {
 }
 function refreshRaceTrack() {
   const el = document.getElementById("raceTrack");
-  const visible = visiblePids();
+  // skutecne poradi pres VSECHNY hrace, ne jen zobrazene - kdyz je hrac mimo top 7 a je
+  // pripinuty jako posledni radek, musi se mu cislo poradi porad menit podle realneho
+  // umisteni, jinak to vypada, ze se v zebricku vubec nehne (byl to nahlaseny bug)
+  const ranked = rankedPids();
+  const rankOf = {};
+  ranked.forEach((pid, i) => { rankOf[pid] = i + 1; });
+  const visible = visiblePids(ranked);
   const visibleSet = new Set(visible);
   el.classList.toggle("compact", visible.length >= COMPACT_FROM);
   Object.keys(laneEls).forEach(pid => {
     if (!lobbyPlayers[pid] || !visibleSet.has(pid)) { laneEls[pid].root.remove(); delete laneEls[pid]; }
   });
-  visible.forEach((pid, i) => {
+  visible.forEach((pid) => {
     const p = lobbyPlayers[pid];
     if (!p) return;
     if (!laneEls[pid]) {
@@ -4637,7 +4643,7 @@ function refreshRaceTrack() {
       };
     }
     el.appendChild(laneEls[pid].root); // appendChild na uz pripojeny prvek ho jen presune na spravne poradi
-    laneEls[pid].rank.textContent = (i + 1) + ".";
+    laneEls[pid].rank.textContent = rankOf[pid] + ".";
     updateLane(pid);
   });
 }
