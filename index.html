@@ -88,6 +88,21 @@
     background: #fff; color: #1f1f1f; border: 1px solid #d8d8d8; margin-bottom: 0;
   }
   .btn-google:hover { background: #f4f4f4; }
+  .seg-btn {
+    background: #1c1c20; border: 1px solid var(--line); color: var(--tx2);
+    box-shadow: none;
+  }
+  .seg-btn:hover { background: #222226; }
+  .seg-btn.active {
+    background: rgba(111,140,255,0.14); border-color: var(--accent); color: var(--tx);
+  }
+  .check-label {
+    text-transform: none; letter-spacing: normal; font-size: 13px; color: var(--tx2);
+    display: flex; align-items: center; gap: 9px; cursor: pointer; margin: 10px 2px 12px;
+  }
+  .check-label input[type=checkbox] {
+    width: 17px; height: 17px; margin: 0; accent-color: var(--accent); cursor: pointer;
+  }
   .mode-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
   .mode-btn {
     background: linear-gradient(160deg, #202024, #202024); border: 1px solid var(--line); border-radius: 18px;
@@ -1093,12 +1108,12 @@
     <ul class="players" id="playerList"></ul>
     <div id="raceModeBox" style="display:none; margin:4px 0 10px;">
       <div style="display:flex; gap:8px; margin-bottom:8px;">
-        <button type="button" class="btn-primary btn-compact" id="modeNormalBtn" style="flex:1;">Normální</button>
-        <button type="button" class="btn-secondary btn-compact" id="modeTimedBtn" style="flex:1;">Časový</button>
+        <button type="button" class="seg-btn btn-compact active" id="modeNormalBtn" style="flex:1;">Normální</button>
+        <button type="button" class="seg-btn btn-compact" id="modeTimedBtn" style="flex:1;">Časový</button>
       </div>
-      <div id="teacherSpectateBox" style="display:none; margin:2px 0 10px;">
-        <label style="display:flex; align-items:center; gap:8px; font-size:13px; color:var(--tx2); cursor:pointer;">
-          <input type="checkbox" id="teacherPlayCheck" style="width:auto; margin:0;">
+      <div id="teacherSpectateBox" style="display:none;">
+        <label class="check-label">
+          <input type="checkbox" id="teacherPlayCheck">
           Hrát s žáky
         </label>
       </div>
@@ -4294,8 +4309,8 @@ let raceMode = "normal";
 function setRaceMode(mode) {
   raceMode = mode;
   const normalBtn = document.getElementById("modeNormalBtn"), timedBtn = document.getElementById("modeTimedBtn");
-  normalBtn.classList.toggle("btn-primary", mode === "normal"); normalBtn.classList.toggle("btn-secondary", mode !== "normal");
-  timedBtn.classList.toggle("btn-primary", mode === "timed"); timedBtn.classList.toggle("btn-secondary", mode !== "timed");
+  normalBtn.classList.toggle("active", mode === "normal");
+  timedBtn.classList.toggle("active", mode === "timed");
   document.getElementById("timedOptionsBox").style.display = mode === "timed" ? "" : "none";
 }
 document.getElementById("modeNormalBtn").addEventListener("click", () => setRaceMode("normal"));
