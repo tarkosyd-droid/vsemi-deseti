@@ -2780,6 +2780,33 @@ function assignmentStatus(a, uid) {
   if (a.deadline && a.deadline < Date.now()) return { cls: "missed", text: "Nesplněno" };
   return { cls: "active", text: "Aktivní" };
 }
+// zak klikne na ukol - presmeruje ho rovnou na danou lekci (text od ucitele, rychlostni vyzvu, nebo konkretni lekci/krok)
+async function goToAssignmentLesson(item, classId) {
+  if (item.type === "speed" || (item.type === "lesson" && item.lessonId === "custom")) {
+    const opts = { id: "assigntext_" + item.id, name: item.label || "Text od učitele", texts: [item.text], classId: classId, assignmentId: item.id };
+    if (item.type === "speed") opts.targetCpm = item.target; else opts.targetAcc = item.target;
+    startSolo(opts);
+    return;
+  }
+  if (item.type !== "lesson" || !item.lessonId) return;
+  if (item.lessonId.indexOf("beg") === 0) {
+    const stageIdx = BEGINNER_STAGES.findIndex(s => s.id === item.lessonId);
+    const stage = BEGINNER_STAGES[stageIdx];
+    if (!stage) return;
+    const profile = await loadProfile();
+    const prevDone = stageIdx === 0 || stageLevelDone(profile, BEGINNER_STAGES[stageIdx - 1].id) >= 3;
+    if (!prevDone) {
+      showToast("Nejdřív dokonči krok " + stageIdx + " („" + BEGINNER_STAGES[stageIdx - 1].name + "“).");
+      return;
+    }
+    const levelsDone = stageLevelDone(profile, stage.id);
+    if (levelsDone === 0) showFingerGuide(stage).then(() => startSolo(stage, stage.texts[0], 1));
+    else startSolo(stage, stage.texts[Math.min(levelsDone, 2)], Math.min(levelsDone + 1, 3));
+    return;
+  }
+  const lesson = LESSONS.find(l => l.id === item.lessonId);
+  if (lesson) startSolo(lesson, pickLessonText(lesson));
+}
 function formatDeadline(ts) {
   const d = new Date(ts);
   return d.toLocaleDateString("cs-CZ") + " " + d.toLocaleTimeString("cs-CZ", { hour: "2-digit", minute: "2-digit" });
@@ -2801,7 +2828,7 @@ function renderClassAssignments(classId, isOwner, assignments, members) {
   } else {
     html += '<div class="lesson-list">' + list.map((a, i) => {
       const doneCount = Object.values(a.progress || {}).filter(p => p && p.done).length;
-      const studentClickable = !isOwner && ((a.type === "lesson" && a.lessonId === "custom") || a.type === "speed");
+      const studentClickable = !isOwner && (a.type === "lesson" || a.type === "speed");
       const rightSide = isOwner
         ? '<span class="best">' + doneCount + '/' + memberCount + ' splnilo</span><button class="icon-btn" data-edit="' + a.id + '" title="Upravit úkol" style="background:none; border:none; cursor:pointer; color:var(--tx2); font-size:15px; padding:2px 6px;">✎</button><span class="friend-remove" data-del="' + a.id + '" title="Smazat úkol">✕</span>'
         : (() => { const s = assignmentStatus(a, currentUser && currentUser.uid); return '<span class="assign-status ' + s.cls + '">' + s.text + '</span>' + (studentClickable ? '<span class="best">Procvičit →</span>' : ''); })();
@@ -2836,11 +2863,7 @@ function renderClassAssignments(classId, isOwner, assignments, members) {
   } else {
     box.querySelectorAll(".lesson-row:not(.static-row)").forEach(row => {
       const item = list[parseInt(row.dataset.aidx, 10)];
-      row.addEventListener("click", () => {
-        const opts = { id: "assigntext_" + item.id, name: item.label || "Text od učitele", texts: [item.text], classId: classId, assignmentId: item.id };
-        if (item.type === "speed") opts.targetCpm = item.target; else opts.targetAcc = item.target;
-        startSolo(opts);
-      });
+      row.addEventListener("click", () => goToAssignmentLesson(item, classId));
     });
   }
 }
@@ -4399,6 +4422,7 @@ function beginRacing(startTime, duration, code, customText) {
     },
     onFinish: async (state) => { await finishRace(state); }
   });
+  raceEngine.state.startTime = startTime; // uhozy/rychlost se pocitaji od startu zavodu, ne od prvniho stisku
   const input = document.getElementById("raceInput");
   input.value = "";
   input.focus();
