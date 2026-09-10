@@ -530,6 +530,15 @@
   #classRaceBanner .crb-close {
     border: none; background: transparent; color: #080b1a; font-size: 15px; cursor: pointer; padding: 4px 6px;
   }
+  .race-timer-row { display: flex; justify-content: center; margin-bottom: 14px; }
+  .race-timer-row #raceTimeLeft {
+    font-family: 'JetBrains Mono', monospace; font-size: 22px; font-weight: 700; letter-spacing: 0.03em;
+    background: #202024; border: 1px solid var(--line); border-radius: 999px; padding: 5px 20px; color: var(--tx);
+  }
+  .race-timer-row #raceTimeLeft.time-low { color: #ff6b7d; border-color: rgba(255,107,125,0.5); animation: timeLowPulse 1s ease-in-out infinite; }
+  @keyframes timeLowPulse { 50% { opacity: 0.45; } }
+  .lane-rank { display: inline-block; min-width: 18px; color: var(--tx2); font-weight: 700; margin-right: 2px; }
+  .lane.lane-me .lane-rank { color: var(--accent); }
   .track { display: flex; flex-direction: column; gap: 16px; margin-bottom: 20px; }
   .track.compact { gap: 7px; max-height: 44vh; overflow-y: auto; padding-right: 4px; }
   .track.compact .lane-label { font-size: 10.5px; margin-bottom: 2px; }
@@ -1145,6 +1154,13 @@
           Hrát s žáky
         </label>
       </div>
+      <div id="normalOptionsBox" style="display:none;">
+        <select id="raceNormalTextSourceSelect" class="race-text-select">
+          <option value="random" selected>Volný text</option>
+          <option value="long">Dlouhý text</option>
+          <option value="own">Vlastní text</option>
+        </select>
+      </div>
       <div id="timedOptionsBox" style="display:none;">
         <select id="raceDurationSelect" class="race-text-select">
           <option value="30000">30 s</option>
@@ -1157,9 +1173,9 @@
           <option value="long">Dlouhý text</option>
           <option value="own">Vlastní text</option>
         </select>
-        <textarea id="raceOwnTextArea" maxlength="2000" placeholder="Napiš nebo vlož text, který se má opisovat… (max. 2000 znaků)" style="display:none; width:100%; min-height:60px; margin:8px 0; font-family:inherit; font-size:13px;"></textarea>
-        <p class="hint" id="raceOwnTextCount" style="display:none; margin:-4px 0 8px; text-align:right;"></p>
       </div>
+      <textarea id="raceOwnTextArea" maxlength="2000" placeholder="Napiš nebo vlož text, který se má opisovat… (max. 2000 znaků)" style="display:none; width:100%; min-height:60px; margin:8px 0; font-family:inherit; font-size:13px;"></textarea>
+      <p class="hint" id="raceOwnTextCount" style="display:none; margin:-4px 0 8px; text-align:right;"></p>
     </div>
     <button class="btn-primary" id="startBtn">Spustit závod</button>
     <p class="hint" id="startErr" style="display:none; color:#ff6b6b; margin-top:8px;"></p>
@@ -1172,11 +1188,12 @@
   </div>
 
   <div id="screen-race" class="card" style="display:none;">
+    <div class="race-timer-row" id="raceTimerRow"><span id="raceTimeLeft">0:00</span></div>
     <div class="track" id="raceTrack"></div>
     <div class="progress-row" id="raceProgressRow">
       <span id="raceProgressLabel">0 / 0 znaků</span>
       <div class="progress-bar"><div class="progress-fill" id="raceProgressFill"></div></div>
-      
+
     </div>
     <div class="text-display" id="raceTextOuter"><div class="text-track" id="raceText"></div></div>
     <div class="keyboard" id="raceKeyboard"></div>
@@ -3984,6 +4001,21 @@ document.getElementById("startBtn").addEventListener("click", async () => {
     } else {
       patch.customText = buildLongRaceText(lobbyCode + ":" + patch.startTime);
     }
+  } else {
+    // normalni rezim - hostitel muze vybrat volny (nahodna veta), dlouhy, nebo vlastni text
+    const normalSrcSel = document.getElementById("raceNormalTextSourceSelect");
+    const normalSrc = normalSrcSel ? normalSrcSel.value : "random";
+    if (normalSrc === "own") {
+      const ownText = (document.getElementById("raceOwnTextArea").value || "").trim();
+      if (!ownText) { errEl.textContent = "Napiš text, který se má opisovat."; errEl.style.display = ""; return; }
+      patch.customText = ownText;
+    } else if (normalSrc === "long") {
+      patch.customText = buildLongRaceText(lobbyCode + ":" + patch.startTime);
+    } else if (!(lobbyMeta && lobbyMeta.classId)) {
+      // volny text u beznych zavodu - smaze pripadny vlastni text z minuleho kola, vybere se nahodna veta
+      patch.customText = null;
+    }
+    // u skolniho zavodu se "volny text" nechava beze zmeny - pouzije se uz pripraveny text s ochranou proti opakovani
   }
   const playCheck = document.getElementById("teacherPlayCheck");
   // ucitel u skolniho zavodu ve vychozim stavu jen sleduje, hrat s zaky si musi vyslovne zaskrtnout
@@ -4409,16 +4441,25 @@ function setRaceMode(mode) {
   const normalBtn = document.getElementById("modeNormalBtn"), timedBtn = document.getElementById("modeTimedBtn");
   normalBtn.classList.toggle("active", mode === "normal");
   timedBtn.classList.toggle("active", mode === "timed");
+  document.getElementById("normalOptionsBox").style.display = mode === "normal" ? "" : "none";
   document.getElementById("timedOptionsBox").style.display = mode === "timed" ? "" : "none";
+  updateTextSourceUI();
 }
 document.getElementById("modeNormalBtn").addEventListener("click", () => setRaceMode("normal"));
 document.getElementById("modeTimedBtn").addEventListener("click", () => setRaceMode("timed"));
-document.getElementById("raceTextSourceSelect").addEventListener("change", () => {
-  const src = document.getElementById("raceTextSourceSelect").value;
-  document.getElementById("raceOwnTextArea").style.display = src === "own" ? "" : "none";
-  document.getElementById("raceOwnTextCount").style.display = src === "own" ? "" : "none";
-  updateOwnTextCount();
-});
+// spolecne textove pole "vlastni text" se ukazuje/skryva podle aktivniho vyberu, at uz je rezim normalni nebo casovy
+function currentTextSourceSelect() {
+  return raceMode === "timed" ? document.getElementById("raceTextSourceSelect") : document.getElementById("raceNormalTextSourceSelect");
+}
+function updateTextSourceUI() {
+  const sel = currentTextSourceSelect();
+  const isOwn = sel && sel.value === "own";
+  document.getElementById("raceOwnTextArea").style.display = isOwn ? "" : "none";
+  document.getElementById("raceOwnTextCount").style.display = isOwn ? "" : "none";
+  if (isOwn) updateOwnTextCount();
+}
+document.getElementById("raceTextSourceSelect").addEventListener("change", updateTextSourceUI);
+document.getElementById("raceNormalTextSourceSelect").addEventListener("change", updateTextSourceUI);
 function updateOwnTextCount() {
   const len = document.getElementById("raceOwnTextArea").value.length;
   document.getElementById("raceOwnTextCount").textContent = len + " / 2000 znaků";
@@ -4452,6 +4493,7 @@ function beginRacing(startTime, duration, code, customText) {
   document.getElementById("raceTrack").innerHTML = "";
   buildRaceTrack();
   const endTime = startTime + duration;
+  updateRaceTimerDisplay(endTime - Date.now());
   if (isSpectator) {
     // ucitel jen sleduje - zadny vlastni vstup, jen tabulka pruhu zaku a jejich zivy postup
     raceEngine = null;
@@ -4461,8 +4503,11 @@ function beginRacing(startTime, duration, code, customText) {
     document.getElementById("raceInput").style.display = "none";
     document.getElementById("raceHint").textContent = "👀 Sleduješ závod jako učitel.";
     gameTimer = setInterval(() => {
-      if (Date.now() >= endTime) {
+      const remainMs = endTime - Date.now();
+      updateRaceTimerDisplay(remainMs);
+      if (remainMs <= 0) {
         clearInterval(gameTimer);
+        if (raceRankTimer) clearInterval(raceRankTimer);
         renderResults();
         setTimeout(() => { show("results", { replace: true }); startPolling(); }, 650);
       }
@@ -4506,6 +4551,7 @@ function beginRacing(startTime, duration, code, customText) {
 
   gameTimer = setInterval(async () => {
     const remainMs = endTime - Date.now();
+    updateRaceTimerDisplay(remainMs);
     if (remainMs <= 0) { clearInterval(gameTimer); if (!raceEngine.state.finished) await finishRace(raceEngine.state); }
   }, 200);
 }
@@ -4515,36 +4561,78 @@ function raceKeyHandler(e) {
     if (e.key.length === 1) raceEngine.onKey(e.key);
   }
 }
-// pruhy se stavi jednou; pri kazde aktualizaci se meni jen sirka a cislo
-function buildRaceTrack() {
-  const el = document.getElementById("raceTrack");
-  el.classList.toggle("compact", playerCount() >= COMPACT_FROM);
-  Object.keys(laneEls).forEach(pid => {
-    if (!lobbyPlayers[pid]) { laneEls[pid].root.remove(); delete laneEls[pid]; }
+// zbyvajici cas zavodu - vzdy videt nad zebrickem, at hrac vi, kolik mu zbyva
+function formatRaceTime(ms) {
+  const s = Math.max(0, Math.ceil(ms / 1000));
+  const m = Math.floor(s / 60);
+  const rem = s % 60;
+  return m + ":" + (rem < 10 ? "0" : "") + rem;
+}
+function updateRaceTimerDisplay(remainMs) {
+  const el = document.getElementById("raceTimeLeft");
+  if (!el) return;
+  el.textContent = formatRaceTime(remainMs);
+  el.classList.toggle("time-low", remainMs <= 10000);
+}
+// s vic hraci se ukazuje jen zebricek nejrychlejsich (+ vzdy vlastni pruh), at se nemusi rolovat pres 20 lidi
+const RACE_TRACK_MAX = 8;
+let raceRankTimer = null;
+function rankedPids() {
+  return Object.keys(lobbyPlayers).sort((a, b) => {
+    const va = lobbyLive[a] || {}, vb = lobbyLive[b] || {};
+    const ca = va.ch || 0, cb = vb.ch || 0;
+    if (cb !== ca) return cb - ca;
+    return (vb.w || 0) - (va.w || 0);
   });
-  orderedPids().forEach(pid => {
-    if (laneEls[pid]) return;
+}
+function visiblePids() {
+  const ranked = rankedPids();
+  const top = ranked.slice(0, RACE_TRACK_MAX);
+  if (playerId && lobbyPlayers[playerId] && !top.includes(playerId)) {
+    return ranked.slice(0, RACE_TRACK_MAX - 1).concat([playerId]);
+  }
+  return top;
+}
+function buildRaceTrack() {
+  refreshRaceTrack();
+  if (raceRankTimer) clearInterval(raceRankTimer);
+  raceRankTimer = setInterval(refreshRaceTrack, 700);
+}
+function refreshRaceTrack() {
+  const el = document.getElementById("raceTrack");
+  const visible = visiblePids();
+  const visibleSet = new Set(visible);
+  el.classList.toggle("compact", visible.length >= COMPACT_FROM);
+  Object.keys(laneEls).forEach(pid => {
+    if (!lobbyPlayers[pid] || !visibleSet.has(pid)) { laneEls[pid].root.remove(); delete laneEls[pid]; }
+  });
+  visible.forEach((pid, i) => {
     const p = lobbyPlayers[pid];
-    const lane = document.createElement("div");
-    lane.className = "lane" + (pid === playerId ? " lane-me" : "");
-    lane.innerHTML =
-      '<div class="lane-label"><b class="with-avatar"><span class="mini-avatar">' + avatarInner(p) + '</span>' + p.name + (pid === playerId ? " (ty)" : "") + '</b><span class="lane-wpm">0 zn/min</span></div>'
-      + '<div class="lane-track"><div class="lane-progress"></div>'
-      + '<div class="lane-avatar">' + avatarInner(p) + '</div>'
-      + '<span class="flag">' + svgIcon("flagicon",14) + '</span></div>';
-    el.appendChild(lane);
-    laneEls[pid] = {
-      root: lane,
-      fill: lane.querySelector(".lane-progress"),
-      av: lane.querySelector(".lane-avatar"),
-      wpm: lane.querySelector(".lane-wpm")
-    };
+    if (!p) return;
+    if (!laneEls[pid]) {
+      const lane = document.createElement("div");
+      lane.className = "lane" + (pid === playerId ? " lane-me" : "");
+      lane.innerHTML =
+        '<div class="lane-label"><b class="with-avatar"><span class="lane-rank"></span><span class="mini-avatar">' + avatarInner(p) + '</span>' + p.name + (pid === playerId ? " (ty)" : "") + '</b><span class="lane-wpm">0 zn/min</span></div>'
+        + '<div class="lane-track"><div class="lane-progress"></div>'
+        + '<div class="lane-avatar">' + avatarInner(p) + '</div>'
+        + '<span class="flag">' + svgIcon("flagicon",14) + '</span></div>';
+      laneEls[pid] = {
+        root: lane,
+        fill: lane.querySelector(".lane-progress"),
+        av: lane.querySelector(".lane-avatar"),
+        wpm: lane.querySelector(".lane-wpm"),
+        rank: lane.querySelector(".lane-rank")
+      };
+    }
+    el.appendChild(laneEls[pid].root); // appendChild na uz pripojeny prvek ho jen presune na spravne poradi
+    laneEls[pid].rank.textContent = (i + 1) + ".";
     updateLane(pid);
   });
 }
 function updateLane(pid) {
   const L = laneEls[pid];
-  if (!L) { if (lobbyPlayers[pid]) buildRaceTrack(); return; }
+  if (!L) return; // hrac neni zrovna mezi zobrazenymi (mimo zebricek) - dorovna se pri dalsim refreshi
   const v = lobbyLive[pid] || {};
   const pct = Math.min(100, v.p || 0);
   L.fill.style.width = pct + "%";
@@ -4555,6 +4643,7 @@ async function finishRace(state) {
   if (raceSubmitted) return;
   raceSubmitted = true;
   clearInterval(gameTimer);
+  if (raceRankTimer) clearInterval(raceRankTimer);
   const elapsed = state.startTime ? (Date.now() - state.startTime) : 1;
   const wpm = computeCpm(state.correctKeys, elapsed);
   const acc = computeAcc(state.correctKeys, state.totalKeys);
@@ -4585,7 +4674,7 @@ function renderResults() {
     const li = document.createElement("li");
     if (i === 0) li.classList.add("podium-1");
     const medal = i === 0 ? svgIcon("medalGold",14) + " " : i === 1 ? svgIcon("medalSilver",14) + " " : i === 2 ? svgIcon("medalBronze",14) + " " : "";
-    const detail = p.finished ? (p.wpm + " zn/min · " + p.acc + "%") : ((p.chars || 0) + " znaků (" + (p.progress || 0) + "%)");
+    const detail = p.finished ? (p.wpm + " zn/min · " + p.acc + "%") : (p.wpm + " zn/min · " + (p.progress || 0) + "% textu");
     li.innerHTML = '<span class="rank">' + medal + (i + 1) + '</span>'
       + '<span class="lname with-avatar"><span class="mini-avatar">' + avatarInner(p) + '</span>' + p.name + (p.pid === playerId ? " (ty)" : "") + '</span>'
       + '<span class="lscore">' + detail + '</span>';
@@ -4597,6 +4686,7 @@ function renderResults() {
   }
 }
 function resetToHome() {
+  if (raceRankTimer) { clearInterval(raceRankTimer); raceRankTimer = null; }
   if (isHost && lobbyMeta && lobbyMeta.classId) {
     fbdb.ref("classes/" + lobbyMeta.classId + "/activeRace").remove().catch(() => {});
   }
