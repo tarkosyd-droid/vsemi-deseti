@@ -974,7 +974,6 @@
       <button class="class-code-badge" id="classDetailCode" title="Klikni a zkopíruj kód" style="display:none;"></button>
     </div>
     <div class="class-actions" id="classActionsBar">
-      <select id="classRaceTextSelect" class="race-text-select" style="display:none;"></select>
       <button class="btn-primary btn-compact" id="startClassRaceBtn">Spustit závod pro třídu</button>
       <button class="btn-ghost" id="exportCsvBtn">Export CSV</button>
       <button class="btn-ghost" id="exportPdfBtn">Export PDF</button>
@@ -2066,14 +2065,14 @@ async function recordResult({ cpm, acc, lessonId, isRace, won, textLength, timeM
   renderProfile(profile);
   if (profile.classId && currentUser) {
     const lc = profile.lessonsCompleted || 0;
-    fbdb.ref("classes/" + profile.classId + "/members/" + currentUser.uid).update({
+    fbdb.ref("classes/" + profile.classId + "/members/" + currentUser.uid).update(Object.assign({
       name: profile.nickname || "Žák",
       cpm: lc ? Math.round((profile.sumCpm || 0) / lc) : 0,
       acc: lc ? Math.round((profile.sumAcc || 0) / lc) : 0,
       lessonsCompleted: lc,
       xp: profile.xp || 0,
       lastActiveAt: Date.now()
-    }).catch(() => {});
+    }, memberAvatarFields(profile))).catch(() => {});
     checkClassAssignments(profile, ctx);
   }
   const newLevel = getLevelInfo(profile.xp).level;
@@ -2658,9 +2657,9 @@ document.getElementById("joinClassBtn").addEventListener("click", async () => {
     const classId = snap.val().classId;
     const className = snap.val().name || "Třída";
     const profile = await loadProfile();
-    await fbdb.ref("classes/" + classId + "/members/" + currentUser.uid).set({
+    await fbdb.ref("classes/" + classId + "/members/" + currentUser.uid).set(Object.assign({
       name: profile.nickname || "Žák", cpm: 0, acc: 0, lessonsCompleted: 0, xp: profile.xp || 0, joinedAt: Date.now()
-    });
+    }, memberAvatarFields(profile)));
     profile.classId = classId;
     profile.className = className;
     await saveProfile(profile);
@@ -2704,7 +2703,6 @@ async function openClassDetail(classId, className) {
       codeEl.textContent = data.inviteCode || "—";
       codeEl.style.display = "";
     }
-    updateClassRaceSelect(isOwner, data.assignments || {});
     const members = data.members || {};
     const rows = Object.keys(members).map(uid => Object.assign({ uid: uid }, members[uid])).sort((a, b) => (b.xp || 0) - (a.xp || 0));
     renderClassAssignments(classId, isOwner, data.assignments || {}, Object.keys(members).length);
@@ -2735,21 +2733,6 @@ document.getElementById("classDetailCode").addEventListener("click", async () =>
   catch (e) { showToast("Kód: " + currentClassInviteCode); }
 });
 function textPreview(t) { return t.length > 60 ? t.slice(0, 60) + "…" : t; }
-function updateClassRaceSelect(isOwner, assignments) {
-  const list = Object.keys(assignments)
-    .map(id => Object.assign({ id: id }, assignments[id]))
-    .filter(a => a.type === "lesson" && a.lessonId === "custom")
-    .sort((a, b) => (a.createdAt || 0) - (b.createdAt || 0));
-  window._currentClassTexts = list;
-  const sel = document.getElementById("classRaceTextSelect");
-  if (isOwner && list.length) {
-    sel.innerHTML = '<option value="">Náhodný text</option>' + list.map(t => '<option value="' + t.id + '">' + (t.label || textPreview(t.text)) + '</option>').join("");
-    sel.style.display = "";
-  } else {
-    sel.innerHTML = "";
-    sel.style.display = "none";
-  }
-}
 const ASSIGNMENT_TYPES = {
   lesson: { name: "Zvládnutí lekce", unit: "% přesnost" },
   speed:  { name: "Rychlostní výzva", unit: "zn/min" }
@@ -3714,6 +3697,13 @@ function playerAvatarFields() {
   else if (cachedProfile && cachedProfile.avatar) f.avatar = cachedProfile.avatar;
   return f;
 }
+// aby ucitel u zaka ve tride videl jeho skutecnou profilovku, ne jen vychozi ikonu
+function memberAvatarFields(profile) {
+  const f = {};
+  if (profile && profile.avatarUrl) f.avatarUrl = profile.avatarUrl;
+  else if (profile && profile.avatar) f.avatar = profile.avatar;
+  return f;
+}
 async function createLobbyAsHost() {
   playerName = autoPlayerName(); playerId = uid(); lobbyCode = await uniqueLobbyCode(); isHost = true;
   const ok = await writeLobby(lobbyRef(lobbyCode, "meta"), {
@@ -4212,16 +4202,14 @@ async function pickClassRaceText(classId) {
 document.getElementById("startClassRaceBtn").addEventListener("click", async () => {
   const classId = currentClassDetailId;
   if (!classId) return;
-  const sel = document.getElementById("classRaceTextSelect");
-  const chosen = sel && sel.value ? (window._currentClassTexts || []).find(t => t.id === sel.value) : null;
   playerName = autoPlayerName(); playerId = uid(); lobbyCode = await uniqueLobbyCode(); isHost = true;
   const meta = {
     code: lobbyCode, hostId: playerId, status: "waiting", startTime: null,
     duration: 45000, createdAt: Date.now(), classId: classId
   };
-  let pickedIdx = null;
-  if (chosen) meta.customText = chosen.text;
-  else { const picked = await pickClassRaceText(classId); meta.customText = picked.text; pickedIdx = picked.idx; }
+  const picked = await pickClassRaceText(classId);
+  meta.customText = picked.text;
+  const pickedIdx = picked.idx;
   const ok = await writeLobby(lobbyRef(lobbyCode, "meta"), meta);
   if (!ok) { showToast("Závod se nepodařilo založit."); return; }
   if (pickedIdx !== null) fbdb.ref("classes/" + classId + "/lastRaceTextIdx").set(pickedIdx).catch(() => {});
