@@ -3996,7 +3996,7 @@ document.getElementById("startBtn").addEventListener("click", async () => {
     return;
   }
   errEl.style.display = "none";
-  const patch = { status: "playing", startTime: Date.now() + 3000 };
+  const patch = { status: "playing", startTime: Date.now() + 3000, timedMode: raceMode === "timed" };
   if (raceMode === "timed") {
     const durSel = document.getElementById("raceDurationSelect");
     const srcSel = document.getElementById("raceTextSourceSelect");
@@ -4484,12 +4484,12 @@ function beginCountdownFromLobby(lobby) {
   const dur = lobby.duration || 45000;
   countdownTimer = setInterval(() => {
     const remain = Math.ceil((target - Date.now()) / 1000);
-    if (remain <= 0) { clearInterval(countdownTimer); beginRacing(target, dur, lobby.code, lobby.customText); }
+    if (remain <= 0) { clearInterval(countdownTimer); beginRacing(target, dur, lobby.code, lobby.customText, !!lobby.timedMode); }
     else document.getElementById("countdownNum").textContent = remain;
   }, 100);
 }
 
-function beginRacing(startTime, duration, code, customText) {
+function beginRacing(startTime, duration, code, customText, timedMode) {
   show("race");
   startPolling();
   const textEl = document.getElementById("raceText");
@@ -4500,7 +4500,11 @@ function beginRacing(startTime, duration, code, customText) {
   document.getElementById("raceTrack").innerHTML = "";
   buildRaceTrack();
   const endTime = startTime + duration;
-  updateRaceTimerDisplay(endTime - Date.now());
+  // odpocet se ukazuje jen u casoveho rezimu - u normalniho zavodu se pise na cas nezavodi,
+  // duration tam je jen tichy bezpecnostni strop, at zavod nezustane viset navzdy
+  document.getElementById("raceTimerRow").style.display = timedMode ? "" : "none";
+  document.getElementById("raceTrack").style.marginTop = timedMode ? "" : "0";
+  if (timedMode) updateRaceTimerDisplay(endTime - Date.now());
   if (isSpectator) {
     // ucitel jen sleduje - zadny vlastni vstup, jen tabulka pruhu zaku a jejich zivy postup
     raceEngine = null;
@@ -4511,7 +4515,7 @@ function beginRacing(startTime, duration, code, customText) {
     document.getElementById("raceHint").textContent = "👀 Sleduješ závod jako učitel.";
     gameTimer = setInterval(() => {
       const remainMs = endTime - Date.now();
-      updateRaceTimerDisplay(remainMs);
+      if (timedMode) updateRaceTimerDisplay(remainMs);
       if (remainMs <= 0) {
         clearInterval(gameTimer);
         if (raceRankTimer) clearInterval(raceRankTimer);
@@ -4558,7 +4562,7 @@ function beginRacing(startTime, duration, code, customText) {
 
   gameTimer = setInterval(async () => {
     const remainMs = endTime - Date.now();
-    updateRaceTimerDisplay(remainMs);
+    if (timedMode) updateRaceTimerDisplay(remainMs);
     if (remainMs <= 0) { clearInterval(gameTimer); if (!raceEngine.state.finished) await finishRace(raceEngine.state); }
   }, 200);
 }
