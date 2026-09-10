@@ -19,6 +19,7 @@
 <script src="https://cdnjs.cloudflare.com/ajax/libs/firebase/10.13.2/firebase-auth-compat.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/firebase/10.13.2/firebase-app-check-compat.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/canvas-confetti/1.9.3/confetti.browser.min.js"></script>
 <style>
   * { box-sizing: border-box; }
@@ -3232,34 +3233,61 @@ document.getElementById("exportCsvBtn").addEventListener("click", () => {
   a.click();
   URL.revokeObjectURL(url);
 });
-document.getElementById("exportPdfBtn").addEventListener("click", () => {
+document.getElementById("exportPdfBtn").addEventListener("click", async () => {
   const rows = window._currentClassRows || [];
   const title = document.getElementById("classDetailTitle").textContent;
+  const escapeHtml = (s) => String(s).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+  // jsPDF ma vestavene fonty jen s WinAnsi znakovou sadou, ktera nezna ceske znaky s hackem
+  // (ř, š, ě, ž, ť, ď, ň...) - misto textu je pak v PDF zmet mezer a nahradnich znaku.
+  // Reseni: tabulku vykreslime jako normalni HTML (font prohlizece diakritiku umi v pohode)
+  // a přes html2canvas ji zabalime do PDF jako obrazek - vzhled 1:1 s tim, co je videt na obrazovce.
+  const wrap = document.createElement("div");
+  wrap.style.cssText = "position:fixed; left:-9999px; top:0; width:740px; background:#fff; color:#111; font-family:Arial, Helvetica, sans-serif; padding:24px;";
+  const rowsHtml = rows.map(m =>
+    "<tr>"
+    + '<td style="padding:7px 8px; border-bottom:1px solid #ddd;">' + escapeHtml(m.name || "") + "</td>"
+    + '<td style="padding:7px 8px; border-bottom:1px solid #ddd; text-align:right;">' + Math.round(m.cpm || 0) + "</td>"
+    + '<td style="padding:7px 8px; border-bottom:1px solid #ddd; text-align:right;">' + Math.round(m.acc || 0) + "%</td>"
+    + '<td style="padding:7px 8px; border-bottom:1px solid #ddd; text-align:right;">' + (m.lessonsCompleted || 0) + "</td>"
+    + '<td style="padding:7px 8px; border-bottom:1px solid #ddd; text-align:right;">' + (m.xp || 0) + "</td>"
+    + "</tr>"
+  ).join("");
+  wrap.innerHTML =
+    '<h2 style="margin:0 0 18px; font-size:22px;">' + escapeHtml(title) + "</h2>"
+    + '<table style="width:100%; border-collapse:collapse; font-size:14px;"><thead><tr>'
+    + '<th style="text-align:left; padding:7px 8px; border-bottom:2px solid #333;">Jméno</th>'
+    + '<th style="text-align:right; padding:7px 8px; border-bottom:2px solid #333;">Zn/min</th>'
+    + '<th style="text-align:right; padding:7px 8px; border-bottom:2px solid #333;">Přesnost</th>'
+    + '<th style="text-align:right; padding:7px 8px; border-bottom:2px solid #333;">Lekcí</th>'
+    + '<th style="text-align:right; padding:7px 8px; border-bottom:2px solid #333;">XP</th>'
+    + "</tr></thead><tbody>" + rowsHtml + "</tbody></table>";
+  document.body.appendChild(wrap);
   try {
+    const canvas = await html2canvas(wrap, { scale: 2, backgroundColor: "#ffffff" });
     const { jsPDF } = window.jspdf;
-    const doc = new jsPDF();
-    doc.setFontSize(16);
-    doc.text(title, 14, 16);
-    doc.setFontSize(10);
-    let y = 28;
-    doc.text("Jméno", 14, y);
-    doc.text("Zn/min", 90, y);
-    doc.text("Přesnost", 120, y);
-    doc.text("Lekcí", 155, y);
-    doc.text("XP", 180, y);
-    y += 6;
-    rows.forEach(m => {
-      doc.text(String(m.name || ""), 14, y);
-      doc.text(String(Math.round(m.cpm || 0)), 90, y);
-      doc.text(Math.round(m.acc || 0) + "%", 120, y);
-      doc.text(String(m.lessonsCompleted || 0), 155, y);
-      doc.text(String(m.xp || 0), 180, y);
-      y += 7;
-      if (y > 280) { doc.addPage(); y = 20; }
-    });
+    const doc = new jsPDF({ unit: "pt", format: "a4" });
+    const pageW = doc.internal.pageSize.getWidth();
+    const pageH = doc.internal.pageSize.getHeight();
+    const margin = 24;
+    const imgW = pageW - margin * 2;
+    const imgH = (canvas.height * imgW) / canvas.width;
+    const usableH = pageH - margin * 2;
+    const imgData = canvas.toDataURL("image/png");
+    let heightLeft = imgH;
+    let position = margin;
+    doc.addImage(imgData, "PNG", margin, position, imgW, imgH);
+    heightLeft -= usableH;
+    while (heightLeft > 0) {
+      position = margin - (imgH - heightLeft);
+      doc.addPage();
+      doc.addImage(imgData, "PNG", margin, position, imgW, imgH);
+      heightLeft -= usableH;
+    }
     doc.save("trida-vysledky.pdf");
   } catch (e) {
     showToast("PDF export se nezdařil, zkus prosím CSV.");
+  } finally {
+    wrap.remove();
   }
 });
 document.getElementById("deleteClassBtn").addEventListener("click", async () => {
