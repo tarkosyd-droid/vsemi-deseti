@@ -1476,25 +1476,16 @@ function centerCurrent(outerEl, trackEl, curEl) {
 }
 
 /* ---------- typing engine (shared by solo + race) ---------- */
-// zacatek aktualniho slova (pozice hned za poslednim mezerou pred "pos", nebo 0)
-function wordStartAt(text, pos) {
-  let i = pos;
-  while (i > 0 && text[i - 1] !== " ") i--;
-  return i;
-}
 function makeTypingEngine(opts) {
-  // "error" = jako na realne klavesnici: kdyz hrac v rozepsanem slove udela chybu, cele
-  // dosud napsane slovicko zcervena. Dal se psat neda, dokud ho hrac krok po kroku
-  // Backspacem cely nesmaze (presne jako v realite - couva se po jednom znaku) a nezacne
-  // slovo psat znova od zacatku. Samotny Backspace se do uhozu/rychlosti nezapocitava.
+  // "error" = jako na realne klavesnici: spatny znak zustane cerveny a blokuje dalsi psani,
+  // dokud ho hrac nesmaze jednim stiskem Backspace - ten sam se do uhozu/rychlosti nezapocitava,
+  // jen tu jednu chybu zrusi (nemaze se cele slovo, jen ten spatny znak)
   const state = { text: opts.text, pos: 0, correctKeys: 0, totalKeys: 0, errors: 0, startTime: null, finished: false, error: false };
   function render() {
-    const errWordStart = state.error ? wordStartAt(state.text, state.pos) : -1;
     const spans = state.text.split("").map((ch, i) => {
       let cls = "";
-      if (state.error && i >= errWordStart && i <= state.pos) cls = (i === state.pos) ? "cur err" : "bad";
-      else if (i < state.pos) cls = "done";
-      else if (i === state.pos) cls = "cur";
+      if (i < state.pos) cls = "done";
+      else if (i === state.pos) cls = state.error ? "cur err" : "cur";
       return '<span class="' + cls + '">' + (ch === " " ? "&nbsp;" : ch) + "</span>";
     });
     opts.textEl.innerHTML = spans.join("");
@@ -1506,15 +1497,11 @@ function makeTypingEngine(opts) {
   function onKey(key) {
     if (state.finished) return;
     if (key === "Backspace") {
-      if (!state.error) return; // mimo chybovy stav se necouva, jen se maze rozepsane spatne slovo
-      const wordStart = wordStartAt(state.text, state.pos);
-      if (state.pos > wordStart) state.pos -= 1;
-      if (state.pos <= wordStart) state.error = false; // cele slovo smazano, muze se psat znova
-      render();
+      if (state.error) { state.error = false; render(); }
       return; // mazani se nepocita jako uhoz
     }
     if (key.length !== 1) return;
-    if (state.error) return; // dokud neni cele slovo smazane, dalsi znaky se ignoruji
+    if (state.error) return; // dokud neni ta jedna chyba smazana, dalsi znaky se ignoruji
     if (state.startTime === null) state.startTime = Date.now();
     const expected = state.text[state.pos];
     state.totalKeys += 1;
