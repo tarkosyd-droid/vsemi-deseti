@@ -85,6 +85,41 @@ const firebaseConfig = {
 firebase.initializeApp(firebaseConfig);
 const db = firebase.database();
 
+// stejny seznam vet a stejny vyber textu jako ma samotna aplikace (pro rezim "normalni" bez vlastniho textu),
+// aby boti pocitali svuj postup vuci STEJNE dlouhemu textu jako skutecni hraci - jinak jim sedi/postup na zebricku
+// neodpovida tomu, co je videt v textu (bot ma jiny cilovy pocet znaku nez realny text)
+const RACE_TEXTS = [
+  "Rychlá liška přeběhla přes pole a schovala se v hustém lese, kde na ni čekala stará sova a moudrý ježek.",
+  "Každé ráno vychází slunce nad horami a probouzí ptáky, kteří zpívají svou píseň celému městu.",
+  "Starý hodinář opravoval hodiny v malé dílně plné ozubených koleček a tikajících přístrojů.",
+  "Děti si hrály na zahradě, zatímco rodiče připravovali večeři pro celou rodinu.",
+  "Kapitán lodi sledoval obzor a čekal na první paprsky světla z majáku na pobřeží.",
+  "V malém městečku se každý týden konal trh, kde prodávali čerstvé ovoce, zeleninu a domácí chléb.",
+  "Horolezci vystoupali na vrchol hory těsně před západem slunce a vyfotili nádherný výhled do údolí.",
+  "Knihovnice srovnávala staré knihy do regálů a hledala mezi nimi vzácný rukopis.",
+  "Vlak projížděl kolem řeky a cestující pozorovali z okna losy pasoucí se na louce.",
+  "Pekař každé ráno před svítáním připravoval těsto na chléb a rohlíky pro celý obchod.",
+  "Astronom pozoroval noční oblohu dalekohledem a hledal novou kometu mezi hvězdami.",
+  "Zahradník zasadil na jaře řadu zeleniny a v létě sklízel rajčata, okurky a papriky.",
+  "Novinář cestoval po zemi a psal reportáže o lidech, kteří změnili svůj region k lepšímu.",
+  "Hasiči rychle dorazili k požáru a během hodiny ho společně s dobrovolníky uhasili.",
+  "Cukrářka zdobila dort drobnými květinami z cukru a chystala ho na sobotní svatbu.",
+  "Rybáři vypluli za svítání na jezero a vrátili se s plnými sítěmi stříbrných ryb.",
+  "Malíř strávil celé odpoledne na louce, kde zachycoval barvy podzimního lesa na plátno.",
+  "Programátorka celou noc ladila kód, než konečně aplikace fungovala bez jediné chyby.",
+];
+function hashCode(str) {
+  let h = 0;
+  for (let i = 0; i < str.length; i++) h = (Math.imul(31, h) + str.charCodeAt(i)) | 0;
+  return h;
+}
+// stejna delka textu, jakou uvidi skutecni hraci v tomto konkretnim kole (vlastni text ucitele, nebo nahodna veta podle stejneho vyberu jako appka)
+function actualRaceTextLength(meta, startTime) {
+  if (meta && meta.customText) return meta.customText.length;
+  const idx = (hashCode(code + ":" + startTime) >>> 0) % RACE_TEXTS.length;
+  return RACE_TEXTS[idx].length;
+}
+
 const logEl = document.getElementById("log");
 function log(msg) {
   const t = new Date().toLocaleTimeString("cs-CZ");
@@ -145,7 +180,7 @@ function watchMeta() {
       finishedCount = 0;
       document.getElementById("statFinished").textContent = "0";
       log("Závod odstartoval, boti začínají psát...");
-      runBots(meta.startTime || Date.now(), meta.duration || 60000);
+      runBots(meta.startTime || Date.now(), meta.duration || 60000, meta);
     }
     if (meta.status === "waiting" && raceArmed) {
       raceArmed = false; // pripraveno na dalsi kolo (rematch)
@@ -155,10 +190,10 @@ function watchMeta() {
   });
 }
 
-function runBots(startTime, duration) {
+function runBots(startTime, duration, meta) {
   const endTime = startTime + (duration || 60000);
+  const targetChars = actualRaceTextLength(meta, startTime); // stejna delka textu jako u skutecnych hracu
   botIds.forEach((id) => {
-    const targetChars = 180 + Math.floor(Math.random() * 260); // 180-440 znaku
     const cpm = 120 + Math.floor(Math.random() * 380); // 120-500 zn/min
     const acc = 84 + Math.floor(Math.random() * 16); // 84-100 %
     let done = false;
