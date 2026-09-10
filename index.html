@@ -2712,7 +2712,7 @@ async function openClassDetail(classId, className) {
     }
     const members = data.members || {};
     const rows = Object.keys(members).map(uid => Object.assign({ uid: uid }, members[uid])).sort((a, b) => (b.xp || 0) - (a.xp || 0));
-    renderClassAssignments(classId, isOwner, data.assignments || {}, Object.keys(members).length);
+    renderClassAssignments(classId, isOwner, data.assignments || {}, members);
     document.getElementById("classDetailCount").textContent = pluralZaci(rows.length);
     const tableEl = document.getElementById("classRosterTable");
     if (!rows.length) {
@@ -2769,7 +2769,9 @@ function formatDeadline(ts) {
   const d = new Date(ts);
   return d.toLocaleDateString("cs-CZ") + " " + d.toLocaleTimeString("cs-CZ", { hour: "2-digit", minute: "2-digit" });
 }
-function renderClassAssignments(classId, isOwner, assignments, memberCount) {
+function renderClassAssignments(classId, isOwner, assignments, members) {
+  const memberList = Object.keys(members || {}).map(uid => Object.assign({ uid: uid }, members[uid]));
+  const memberCount = memberList.length;
   const list = Object.keys(assignments).map(id => Object.assign({ id: id }, assignments[id]))
     .sort((a, b) => (a.createdAt || 0) - (b.createdAt || 0));
   const box = document.getElementById("classAssignmentsBox");
@@ -2786,7 +2788,7 @@ function renderClassAssignments(classId, isOwner, assignments, memberCount) {
       const doneCount = Object.values(a.progress || {}).filter(p => p && p.done).length;
       const studentClickable = !isOwner && ((a.type === "lesson" && a.lessonId === "custom") || a.type === "speed");
       const rightSide = isOwner
-        ? '<span class="best">' + doneCount + '/' + memberCount + ' splnilo</span><span class="friend-remove" data-del="' + a.id + '" title="Smazat úkol">✕</span>'
+        ? '<span class="best">' + doneCount + '/' + memberCount + ' splnilo</span><button class="icon-btn" data-edit="' + a.id + '" title="Upravit úkol" style="background:none; border:none; cursor:pointer; color:var(--tx2); font-size:15px; padding:2px 6px;">✎</button><span class="friend-remove" data-del="' + a.id + '" title="Smazat úkol">✕</span>'
         : (() => { const s = assignmentStatus(a, currentUser && currentUser.uid); return '<span class="assign-status ' + s.cls + '">' + s.text + '</span>' + (studentClickable ? '<span class="best">Procvičit →</span>' : ''); })();
       const rowCls = (isOwner || studentClickable) ? "lesson-row" : "lesson-row static-row";
       return '<div class="' + rowCls + '" data-aidx="' + i + '"><span class="name">' + (a.label || ASSIGNMENT_TYPES[a.type].name) + '<br><span class="hint" style="font-size:12px;">' + assignmentDesc(a) + ' · do ' + formatDeadline(a.deadline) + '</span></span>' + rightSide + '</div>';
@@ -2798,7 +2800,14 @@ function renderClassAssignments(classId, isOwner, assignments, memberCount) {
     box.querySelectorAll(".lesson-row").forEach(row => {
       const item = list[parseInt(row.dataset.aidx, 10)];
       row.addEventListener("click", (e) => {
-        if (e.target.dataset.del) return;
+        if (e.target.dataset.del || e.target.dataset.edit) return;
+        showAssignmentCompletionModal(classId, item, memberList);
+      });
+    });
+    box.querySelectorAll("[data-edit]").forEach(btn => {
+      btn.addEventListener("click", (e) => {
+        e.stopPropagation();
+        const item = list.find(a => a.id === btn.dataset.edit);
         showAssignmentDialog(classId, item);
       });
     });
@@ -2819,6 +2828,31 @@ function renderClassAssignments(classId, isOwner, assignments, memberCount) {
       });
     });
   }
+}
+// ucitel klikne na radek ukolu - uvidi, kteri zaci ho splnili a kteri jeste ne (editace je samostatne tlacitko ✎)
+function showAssignmentCompletionModal(classId, item, memberList) {
+  const overlay = document.createElement("div");
+  overlay.className = "levelup-overlay";
+  const rows = memberList.slice().sort((a, b) => (a.name || "").localeCompare(b.name || "", "cs"));
+  const doneCount = rows.filter(m => item.progress && item.progress[m.uid] && item.progress[m.uid].done).length;
+  const rowsHtml = rows.length ? rows.map(m => {
+    const p = item.progress && item.progress[m.uid];
+    const done = !!(p && p.done);
+    const s = assignmentStatus(item, m.uid);
+    const statusHtml = done
+      ? '<span class="assign-status done">✓ Splněno' + (p.completedAt ? ' · ' + formatDeadline(p.completedAt) : '') + '</span>'
+      : '<span class="assign-status ' + s.cls + '">' + s.text + '</span>';
+    return '<div class="lesson-row static-row"><span class="name with-avatar"><span class="mini-avatar">' + avatarInner(m) + '</span>' + (m.name || "Žák") + '</span>' + statusHtml + '</div>';
+  }).join("") : '<p class="hint">Ve třídě zatím nejsou žádní žáci.</p>';
+  overlay.innerHTML = '<div class="levelup-card form-card" style="cursor:default; width:100%; max-width:420px; text-align:left;">'
+    + '<p class="lu-title" style="margin:0 0 2px; font-size:18px;">' + (item.label || ASSIGNMENT_TYPES[item.type].name) + '</p>'
+    + '<p class="hint" style="text-align:left; margin:0 0 14px;">' + doneCount + ' / ' + rows.length + ' žáků splnilo</p>'
+    + '<div>' + rowsHtml + '</div>'
+    + '<button class="btn-secondary" id="assignCompletionCloseBtn" style="margin-top:16px;">Zavřít</button>'
+    + '</div>';
+  document.body.appendChild(overlay);
+  overlay.addEventListener("click", (e) => { if (e.target === overlay) overlay.remove(); });
+  overlay.querySelector("#assignCompletionCloseBtn").addEventListener("click", () => overlay.remove());
 }
 /* ---- nahrazuje ošklivý nativní <select> popup vlastním stylovaným dropdownem ---- */
 /* realny <select> zustava v DOM (skryty) kvuli hodnote/eventum/testum, jen se vizualne nahrazuje */
