@@ -1481,15 +1481,41 @@ function makeTypingEngine(opts) {
   // dokud ho hrac nesmaze jednim stiskem Backspace - ten sam se do uhozu/rychlosti nezapocitava,
   // jen tu jednu chybu zrusi (nemaze se cele slovo, jen ten spatny znak)
   const state = { text: opts.text, pos: 0, correctKeys: 0, totalKeys: 0, errors: 0, startTime: null, finished: false, error: false };
+  // spany se pro cely text vytvori jen jednou (buildSpans); kazdy dalsi stisk klavesy pak jen
+  // preklopi className na dvou spanech (predchozi a novy aktualni), misto aby se pri kazdem
+  // uhozu prepisoval cely innerHTML - u dlouhych textu (stovky znaku) to drzelo INP kolem 400ms,
+  // protoze se pri kazde klavese znovu parsoval a layoutoval cely blok HTML od nuly
+  let spanEls = null;
+  let lastPos = -1;
+  let lastError = false;
+  function buildSpans() {
+    const frag = document.createDocumentFragment();
+    spanEls = new Array(state.text.length);
+    for (let i = 0; i < state.text.length; i++) {
+      const span = document.createElement("span");
+      span.textContent = state.text[i] === " " ? " " : state.text[i];
+      spanEls[i] = span;
+      frag.appendChild(span);
+    }
+    opts.textEl.innerHTML = "";
+    opts.textEl.appendChild(frag);
+    if (spanEls.length) spanEls[0].className = state.error ? "cur err" : "cur";
+    lastPos = 0;
+    lastError = state.error;
+  }
   function render() {
-    const spans = state.text.split("").map((ch, i) => {
-      let cls = "";
-      if (i < state.pos) cls = "done";
-      else if (i === state.pos) cls = state.error ? "cur err" : "cur";
-      return '<span class="' + cls + '">' + (ch === " " ? "&nbsp;" : ch) + "</span>";
-    });
-    opts.textEl.innerHTML = spans.join("");
-    const curEl = opts.textEl.querySelector("span.cur") || opts.textEl.lastElementChild;
+    if (spanEls === null) {
+      buildSpans();
+    } else if (state.pos !== lastPos) {
+      if (lastPos >= 0 && lastPos < spanEls.length) spanEls[lastPos].className = "done";
+      if (state.pos < spanEls.length) spanEls[state.pos].className = state.error ? "cur err" : "cur";
+      lastPos = state.pos;
+      lastError = state.error;
+    } else if (state.error !== lastError) {
+      if (state.pos < spanEls.length) spanEls[state.pos].className = state.error ? "cur err" : "cur";
+      lastError = state.error;
+    }
+    const curEl = spanEls[state.pos] || spanEls[spanEls.length - 1];
     centerCurrent(opts.outerEl, opts.textEl, curEl);
     highlightNext(opts.keyboardEl, state.text[state.pos] || " ");
     if (opts.onRender) opts.onRender(state);
