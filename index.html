@@ -1745,8 +1745,8 @@ async function saveProfile(p) {
     if (currentUser) {
       await fbdb.ref("users/" + currentUser.uid + "/profile").set(p);
       const pub = { name: p.nickname || "Hráč" };
+      if (p.avatar) pub.avatar = p.avatar;
       if (p.avatarUrl) pub.avatarUrl = p.avatarUrl;
-      else if (p.avatar) pub.avatar = p.avatar;
       fbdb.ref("publicProfiles/" + currentUser.uid).set(pub).catch(() => {});
     }
     else { localStorage.setItem("profile:me", JSON.stringify(p)); }
@@ -1823,10 +1823,33 @@ document.getElementById("authLogoutBtn").addEventListener("click", () => fbauth.
 document.getElementById("authNickBtn").addEventListener("click", async () => {
   if (!currentUser) return;
   const nick = await askNickname(currentUser.uid);
+  if (!nick) return;
   const profile = await loadProfile();
   profile.nickname = nick;
   await saveProfile(profile);
   await claimUsername(currentUser.uid, nick);
+  renderProfile(profile);
+});
+document.getElementById("profileAvatarCircle").addEventListener("click", () => {
+  if (!currentUser) return;
+  document.getElementById("avatarFileInput").click();
+});
+document.getElementById("avatarFileInput").addEventListener("change", async (e) => {
+  const file = e.target.files && e.target.files[0];
+  e.target.value = "";
+  if (!file || !currentUser) return;
+  if (!file.type || file.type.indexOf("image/") !== 0) {
+    showToast("Vyber prosím obrázek.");
+    return;
+  }
+  let dataUrl;
+  try { dataUrl = await compressImageToDataUrl(file, 200); }
+  catch (e2) { showToast("Fotku se nepodařilo nahrát, zkus to znovu."); return; }
+  const ok = await showConfirm("Nastavit jako profilovku?", "Nahradí se tvá současná profilovka touhle fotkou.");
+  if (!ok) return;
+  const profile = await loadProfile();
+  profile.avatarUrl = dataUrl;
+  await saveProfile(profile);
   renderProfile(profile);
 });
 document.getElementById("profileLicenseSubmit").addEventListener("click", async () => {
@@ -1884,9 +1907,11 @@ fbauth.onAuthStateChanged(async (user) => {
       const profile = freshSnap.val() || {};
       if (!profile.nickname) {
         const nick = await askNickname(user.uid);
-        profile.nickname = nick;
-        await fbdb.ref("users/" + user.uid + "/profile").set(profile);
-        await claimUsername(user.uid, nick);
+        if (nick) {
+          profile.nickname = nick;
+          await fbdb.ref("users/" + user.uid + "/profile").set(profile);
+          await claimUsername(user.uid, nick);
+        }
       }
     } catch (e) { /* ignorováno */ }
   }
@@ -1925,11 +1950,7 @@ function renderProfile(profile) {
   const avatarCircle = document.getElementById("profileAvatarCircle");
   const avatarPicker = document.getElementById("profileAvatarPicker");
   if (avatarCircle && avatarPicker) {
-    if (profile.avatarUrl) {
-      avatarCircle.innerHTML = '<img src="' + profile.avatarUrl + '" alt="profilovka">';
-    } else {
-      avatarCircle.innerHTML = avatarValueHtml(profile.avatar || AVATAR_OPTIONS[0].img);
-    }
+    avatarCircle.innerHTML = avatarValueHtml(profile.avatarUrl || profile.avatar || AVATAR_OPTIONS[0].img);
     const current = profile.avatar || AVATAR_OPTIONS[0].img;
     avatarPicker.innerHTML = "";
     AVATAR_OPTIONS.forEach(a => {
@@ -1940,7 +1961,7 @@ function renderProfile(profile) {
         opt.innerHTML = avatarValueHtml(a.img);
         opt.title = a.name;
         opt.addEventListener("click", async () => {
-          if (a.img === current && !profile.avatarUrl) return;
+          if (a.img === current) return;
           const ok = await showConfirm("Změnit profilovku?", "Nahradí se tvá současná profilovka ikonou „" + a.name + "“.");
           if (!ok) return;
           profile.avatar = a.img;
@@ -2058,9 +2079,10 @@ function askNickname(currentUid) {
   return new Promise((resolve) => {
     const overlay = document.createElement("div");
     overlay.className = "levelup-overlay";
-    overlay.innerHTML = '<div class="levelup-card" style="cursor:default;">'
+    overlay.innerHTML = '<div class="levelup-card" style="cursor:default; position:relative;">'
+      + '<button id="nicknamePromptClose" aria-label="Zavřít" style="position:absolute; top:10px; right:10px; width:28px; height:28px; border:none; background:transparent; color:var(--tx2); font-size:18px; line-height:1; cursor:pointer;">✕</button>'
       + '<div class="lu-icon">👋</div>'
-      + '<p class="lu-title">Jak se ti budeme říkat?</p>'
+      + '<p class="lu-title">Jak se budeš jmenovat?</p>'
       + '<p class="lu-sub" style="margin-bottom:14px;">Tahle přezdívka se bude zobrazovat v žebříčku a v závodech.</p>'
       + '<input type="text" id="nicknamePromptInput" placeholder="Tvoje přezdívka" maxlength="16" style="text-align:center; margin-bottom:8px;">'
       + '<p class="hint" id="nicknamePromptErr" style="display:none; color:#ff6b6b; margin:0 0 8px;"></p>'
@@ -2091,6 +2113,7 @@ function askNickname(currentUid) {
       resolve(val);
     }
     overlay.querySelector("#nicknamePromptSave").addEventListener("click", submit);
+    overlay.querySelector("#nicknamePromptClose").addEventListener("click", () => { overlay.remove(); resolve(null); });
     input.addEventListener("keydown", e => { if (e.key === "Enter") submit(); });
   });
 }
@@ -2458,8 +2481,7 @@ async function renderFriendsList(profile) {
       showPublicProfile({
         name: nameOf(k),
         cpm: found ? found.cpm : undefined, acc: found ? found.acc : undefined,
-        avatar: live ? live.avatar : (found ? found.avatar : undefined),
-        avatarUrl: live ? live.avatarUrl : (found ? found.avatarUrl : undefined)
+        avatar: live ? live.avatar : (found ? found.avatar : undefined)
       });
     });
   });
@@ -3539,46 +3561,29 @@ function renderQuests(dailyQuests) {
   }).join("");
 }
 
+// zmenseni nahrane fotky na rozumnou velikost pred ulozenim jako data URL (kvuli limitu v pravidlech databaze)
 function compressImageToDataUrl(file, size) {
   return new Promise((resolve, reject) => {
     const reader = new FileReader();
-    reader.onload = (ev) => {
+    reader.onerror = () => reject(new Error("Fotku se nepodařilo načíst."));
+    reader.onload = () => {
       const img = new Image();
+      img.onerror = () => reject(new Error("Fotku se nepodařilo načíst."));
       img.onload = () => {
+        const s = size || 200;
         const canvas = document.createElement("canvas");
-        canvas.width = size; canvas.height = size;
+        canvas.width = s; canvas.height = s;
         const ctx = canvas.getContext("2d");
-        const minDim = Math.min(img.width, img.height);
-        const sx = (img.width - minDim) / 2, sy = (img.height - minDim) / 2;
-        ctx.drawImage(img, sx, sy, minDim, minDim, 0, 0, size, size);
-        resolve(canvas.toDataURL("image/jpeg", 0.75));
+        const side = Math.min(img.width, img.height);
+        const sx = (img.width - side) / 2, sy = (img.height - side) / 2;
+        ctx.drawImage(img, sx, sy, side, side, 0, 0, s, s);
+        resolve(canvas.toDataURL("image/jpeg", 0.82));
       };
-      img.onerror = reject;
-      img.src = ev.target.result;
+      img.src = reader.result;
     };
-    reader.onerror = reject;
     reader.readAsDataURL(file);
   });
 }
-document.getElementById("profileAvatarCircle").addEventListener("click", () => {
-  document.getElementById("avatarFileInput").click();
-});
-document.getElementById("avatarFileInput").addEventListener("change", async (e) => {
-  const file = e.target.files[0];
-  if (!file) return;
-  try {
-    const dataUrl = await compressImageToDataUrl(file, 128);
-    const previewHtml = '<img src="' + dataUrl + '" alt="náhled" style="width:72px;height:72px;border-radius:50%;object-fit:cover;display:block;margin:0 auto 10px;">Nastavit tuto fotku jako profilovku?';
-    const ok = await showConfirm("Změnit profilovku?", previewHtml);
-    if (!ok) { e.target.value = ""; return; }
-    const profile = await loadProfile();
-    profile.avatarUrl = dataUrl;
-    await saveProfile(profile);
-    renderProfile(profile);
-  } catch (err) { /* nahrání se nezdařilo, ignorováno */ }
-  e.target.value = "";
-});
-
 function avatarValueHtml(v) {
   if (!v) return "🙂";
   if (v.indexOf("data:") === 0) return '<img src="' + v + '" alt="">';
@@ -3593,8 +3598,8 @@ async function submitToLeaderboard(name, cpm, acc) {
   if (!name || !cpm) return;
   const key = currentUser ? currentUser.uid : name;
   const entry = { name, cpm, acc, ts: Date.now(), key, hasAccount: !!currentUser };
+  if (cachedProfile && cachedProfile.avatar) entry.avatar = cachedProfile.avatar;
   if (cachedProfile && cachedProfile.avatarUrl) entry.avatarUrl = cachedProfile.avatarUrl;
-  else if (cachedProfile && cachedProfile.avatar) entry.avatar = cachedProfile.avatar;
   for (const path of ["board/top", "board/week/" + isoWeekKey(new Date())]) {
     try {
       const snap = await fbdb.ref(path).get();
@@ -3623,12 +3628,10 @@ async function updateGoProfilePreview() {
   const lessonsCount = profile.lessonsCompleted || 0;
   document.getElementById("homeStatSpeed").textContent = lessonsCount ? Math.round((profile.sumCpm || 0) / lessonsCount) : 0;
   document.getElementById("homeStatAcc").textContent = (lessonsCount ? Math.round((profile.sumAcc || 0) / lessonsCount) : 0) + "%";
-  if (profile.avatarUrl) avatarEl.innerHTML = '<img src="' + profile.avatarUrl + '" alt="">';
-  else avatarEl.innerHTML = avatarValueHtml(profile.avatar || AVATAR_OPTIONS[0].img);
+  avatarEl.innerHTML = avatarValueHtml(profile.avatarUrl || profile.avatar || AVATAR_OPTIONS[0].img);
   const topAv = document.getElementById("topAvatarCircle");
   if (topAv) {
-    if (profile.avatarUrl) topAv.innerHTML = '<img src="' + profile.avatarUrl + '" alt="" style="width:100%;height:100%;object-fit:cover;border-radius:50%;display:block;">';
-    else topAv.innerHTML = avatarValueHtml(profile.avatar || AVATAR_OPTIONS[0].img).replace('<img ', '<img style="width:100%;height:100%;object-fit:cover;border-radius:50%;display:block;" ');
+    topAv.innerHTML = avatarValueHtml(profile.avatarUrl || profile.avatar || AVATAR_OPTIONS[0].img).replace('<img ', '<img style="width:100%;height:100%;object-fit:cover;border-radius:50%;display:block;" ');
   }
 }
 async function loadFriendsLeaderboard(el) {
@@ -4067,15 +4070,15 @@ function autoPlayerName() {
 }
 function playerAvatarFields() {
   const f = {};
+  if (cachedProfile && cachedProfile.avatar) f.avatar = cachedProfile.avatar;
   if (cachedProfile && cachedProfile.avatarUrl) f.avatarUrl = cachedProfile.avatarUrl;
-  else if (cachedProfile && cachedProfile.avatar) f.avatar = cachedProfile.avatar;
   return f;
 }
 // aby ucitel u zaka ve tride videl jeho skutecnou profilovku, ne jen vychozi ikonu
 function memberAvatarFields(profile) {
   const f = {};
+  if (profile && profile.avatar) f.avatar = profile.avatar;
   if (profile && profile.avatarUrl) f.avatarUrl = profile.avatarUrl;
-  else if (profile && profile.avatar) f.avatar = profile.avatar;
   return f;
 }
 async function createLobbyAsHost() {
